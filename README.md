@@ -1,1 +1,1 @@
-# chess-engine-UCI
+# In-class project for CSCI 693
