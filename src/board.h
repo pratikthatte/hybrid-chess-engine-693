@@ -1,16 +1,19 @@
 #ifndef BOARD_H
 #define BOARD_H
+#include "typedefs.h"
+#include <unordered_map>
+
+class EvaluationEngine;
+class MoveGenerationEngine;
 
 class Board{
     public:
-        //Constructor
-        Board();
-        //Destructor
+        explicit Board(MoveGenerationEngine& moveGenerationEngine, EvaluationEngine& evaluationEngine);
         ~Board();
         BitBoard generate_random_bitboard();
         void init_zobrist_hashing();
-    private:
-        //Declaring BitBoards for 12 distinct piece types 
+        void parsePosition(char* command);
+        void getBestMove();
         BitBoard black_pawn;
         BitBoard white_pawn;
         BitBoard black_knight;
@@ -23,15 +26,40 @@ class Board{
         BitBoard white_king;
         BitBoard black_queen;
         BitBoard white_queen;
-        // Array to store 64 unsigned long longs each left shifted by 1 from the previous value. Board square representation
+    private:
+        MoveGenerationEngine& moveEngine;
+        EvaluationEngine& evaluationEngine;
+        BitBoard board_occupancy;
+        BitBoard board_hash;
+        BitBoard board_attack_mask;
+        int turn;
+        int castling;
+        int enPassantSq;
+        int halfMoveCount;
+        int fullMoveCount;
+        int whiteKingSq;
+        int blackKingSq;
+        char* fen_string;
         BitBoard board_squares[64];
-        //Array for zobrist hashes of each piece on each square
         BitBoard zobrist_pieces_hash[12][64];
-        //Array for zobrist hashes for each square of board in case of en passant
         BitBoard zobrist_en_passant[64];
-        // Zobrist hashes for castling, 2 on each side
         BitBoard zobrist_castling[16];
-        //Bitboard to represent zobrist hash for white's turn to play. Could be a bool but works better as a Bitboard for XOR purposes.
         BitBoard zobrist_white_to_move;
+        void evaluateFen(char* fen);
+        int charToPiece(char c);
+        BitBoard* getPieceBitBoard(int piece);
+        void resetBoard();
+        void generateOccupancyMask();
+        void generateBoardHash();
+        void computeHashAgainstPiece(BitBoard* hash, BitBoard piece, int& index);
+        void generateAttackMasks();
+        void makeMove(char* moves);
+        void populateMove(char* moves, Move* move);
+        void implementMove(Move* temp_move);
+        void makeEnPassantMove(Move* move);
+        void makeCastleMove(Move* move);
+        std::unordered_map<Pieces,int> piece_value_map;
+        void init_piece_value_map();
+        void compareTempBBWithRookAndCastleChanges(BitBoard bb, BitBoard rook, Move* move);
 };
 #endif
