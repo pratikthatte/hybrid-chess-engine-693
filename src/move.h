@@ -14,6 +14,8 @@ public:
     BitBoard get_bishop_attacks(int square, BitBoard occupied);
     BitBoard get_rook_attacks(int square, BitBoard occupied);
     BitBoard get_queen_attacks(int square, BitBoard occupied);
+    BitBoard get_pawn_white_right(int sq);
+    BitBoard get_pawn_white_left(int sq);
 
 private:
     std::array<BitBoard, 64> knight_movement;

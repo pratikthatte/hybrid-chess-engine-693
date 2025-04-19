@@ -17,4 +17,11 @@ typedef struct {
     int score;
     bool exhausted;
 } Move;
+typedef struct {
+    BitBoard zobrist;
+    int eval;
+    int nodeType;
+    int depth;
+    Move move;
+} TTEntry;
 #endif

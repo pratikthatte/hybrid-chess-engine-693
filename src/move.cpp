@@ -475,4 +475,10 @@ BitBoard MoveGenerationEngine::generate_rook_attacks_with_obstacles(int sq, BitB
     }
     return temp_bb;
 }
+BitBoard MoveGenerationEngine::get_pawn_white_right(int sq){
+    return white_pawn_right_movement[sq];
+}
+BitBoard MoveGenerationEngine::get_pawn_white_left(int sq){
+    return white_pawn_left_movement[sq];
+}
 

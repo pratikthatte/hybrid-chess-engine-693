@@ -26,21 +26,38 @@ class Board{
         BitBoard white_king;
         BitBoard black_queen;
         BitBoard white_queen;
+        Move* search_move;
+        BitBoard board_hash;
+        BitBoard board_occupancy;
+        BitBoard board_occupancy_white;
+        BitBoard board_occupancy_black;
+        int turn;
+        int whiteKingSq;
+        int blackKingSq;
+        int enPassantSq;
+        BitBoard board_squares[64];
+        BitBoard get_pawn_white_right(int sq);
+        BitBoard get_pawn_white_left(int sq);
+        int basic_evaluate(BitBoard white_pawns, BitBoard black_pawns,
+            BitBoard white_knights, BitBoard black_knights,
+            BitBoard white_bishops, BitBoard black_bishops,
+            BitBoard white_rooks, BitBoard black_rooks,
+            BitBoard white_queens, BitBoard black_queens);
+        BitBoard get_pawn_attacks(int sq, bool whiteToPlay);
+        BitBoard get_knight_attacks(int square);
+        BitBoard get_king_attacks(int square);
+        BitBoard get_bishop_attacks(int square, BitBoard occupied);
+        BitBoard get_rook_attacks(int square, BitBoard occupied);
+        BitBoard get_queen_attacks(int square, BitBoard occupied);
+        void implementMove(Move* temp_move);
     private:
         MoveGenerationEngine& moveEngine;
         EvaluationEngine& evaluationEngine;
-        BitBoard board_occupancy;
-        BitBoard board_hash;
         BitBoard board_attack_mask;
-        int turn;
         int castling;
-        int enPassantSq;
         int halfMoveCount;
         int fullMoveCount;
-        int whiteKingSq;
-        int blackKingSq;
         char* fen_string;
-        BitBoard board_squares[64];
         BitBoard zobrist_pieces_hash[12][64];
         BitBoard zobrist_en_passant[64];
         BitBoard zobrist_castling[16];
@@ -55,7 +72,6 @@ class Board{
         void generateAttackMasks();
         void makeMove(char* moves);
         void populateMove(char* moves, Move* move);
-        void implementMove(Move* temp_move);
         void makeEnPassantMove(Move* move);
         void makeCastleMove(Move* move);
         std::unordered_map<Pieces,int> piece_value_map;

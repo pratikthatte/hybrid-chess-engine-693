@@ -184,7 +184,9 @@ void Board::resetBoard(){
     this->enPassantSq = -1;
 }
 void Board::generateOccupancyMask(){
-    this->board_occupancy = this->black_pawn | this->white_pawn | this->black_knight | this->white_knight | this->black_bishop | this->white_bishop | this->black_rook | this->white_rook | this->black_queen | this->white_queen | this->black_king | this->white_king; 
+    this->board_occupancy_white = this->white_pawn | this->white_knight | this->white_bishop | this->white_rook | this->white_queen | this->white_king; 
+    this->board_occupancy_black = this->black_pawn | this->black_knight | this->black_bishop | this->black_rook | this->black_queen | this->black_king; 
+    this->board_occupancy = this->board_occupancy_white | this->board_occupancy_black;
 }
 void Board::generateBoardHash(){
     this->board_hash = 0LL;
@@ -582,4 +584,35 @@ void Board::compareTempBBWithRookAndCastleChanges(BitBoard bb, BitBoard rook, Mo
         if(this->turn==-1 && move->fromSquare==0)   this->castling &= 0b0111;
         if(this->turn==-1 && move->fromSquare==7)   this->castling &= 0b1011;
     }
+}
+BitBoard Board::get_pawn_white_right(int sq){
+    return moveEngine.get_pawn_white_right(sq);
+}
+BitBoard Board::get_pawn_white_left(int sq){
+    return moveEngine.get_pawn_white_left(sq);
+}
+int Board::basic_evaluate(BitBoard white_pawns, BitBoard black_pawns,
+    BitBoard white_knights, BitBoard black_knights,
+    BitBoard white_bishops, BitBoard black_bishops,
+    BitBoard white_rooks, BitBoard black_rooks,
+    BitBoard white_queens, BitBoard black_queens){
+        return evaluationEngine.basic_evaluate(white_pawn,black_pawn,white_knights,black_knights,white_bishops, black_bishops, white_rooks, black_rooks,white_queen, black_queen);
+}
+BitBoard Board::get_pawn_attacks(int sq, bool whiteToPlay){
+    return moveEngine.get_pawn_attacks(sq,whiteToPlay);
+}
+BitBoard Board::get_knight_attacks(int sq){
+    return moveEngine.get_knight_attacks(sq);
+}
+BitBoard Board::get_king_attacks(int square){
+    return moveEngine.get_king_attacks(square);
+}
+BitBoard Board::get_bishop_attacks(int square, BitBoard occupied){
+    return moveEngine.get_bishop_attacks(square,occupied);
+}
+BitBoard Board::get_rook_attacks(int square, BitBoard occupied){
+    return moveEngine.get_rook_attacks(square,occupied);
+}
+BitBoard Board::get_queen_attacks(int square, BitBoard occupied){
+    return moveEngine.get_queen_attacks(square,occupied);
 }

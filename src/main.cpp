@@ -3,12 +3,14 @@
 #include <memory>
 #include "board.h"
 #include "move.h"
+#include "search.h"
 #include "evaluation.h"
 
 int main(){
     std::unique_ptr<MoveGenerationEngine> moveEngine = std::make_unique<MoveGenerationEngine>();
     std::unique_ptr<EvaluationEngine> evaluationEngine = std::make_unique<EvaluationEngine>();
     Board* board = new Board(*moveEngine, *evaluationEngine);
+    SearchEngine* searchEngine = new SearchEngine();
     std::setbuf(stdin,NULL);
     std::setbuf(stdout,NULL);
     int buffersize = 2000;
@@ -36,7 +38,7 @@ int main(){
             board->parsePosition("position startpos");
         }
         else if (strncmp(input, "go", 2) == 0){
-            board->getBestMove();
+            searchEngine->populateBestMoveMinimaxSearch(board);
         }
 
     }
