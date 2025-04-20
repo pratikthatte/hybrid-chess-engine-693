@@ -6,18 +6,14 @@
 #include <climits>
 #include <cstring>
 #include <vector>
+#include <ctime>
+#include <cmath>
 
 SearchEngine::SearchEngine() { }
 SearchEngine::~SearchEngine() { }
 
 int SearchEngine::evaluateBoard(Board &board) {
-    return board.basic_evaluate(
-        board.white_pawn, board.black_pawn,
-        board.white_knight, board.black_knight,
-        board.white_bishop, board.black_bishop,
-        board.white_rook, board.black_rook,
-        board.white_queen, board.black_queen
-    );
+    return board.basic_evaluate();
 }
 
 std::vector<Move> SearchEngine::generateLegalMoves(Board &board) {
@@ -304,3 +300,118 @@ Move SearchEngine::addMove(Board &board, int fromSq, int toSq, Pieces piece) {
     }
     return m;
 };
+double SearchEngine::uctValue(TreeNode* child, int parentVisits, double C = 1.4){
+    if (child->visits == 0) return std::numeric_limits<double>::max();
+    return child->totalValue / child->visits + C * std::sqrt(std::log(parentVisits) / child->visits);
+}
+SearchEngine::TreeNode* SearchEngine::selectChild(TreeNode* node){
+    TreeNode* bestChild = nullptr;
+    double bestVal = -std::numeric_limits<double>::infinity();
+    for (TreeNode* child : node->children) {
+        double val = uctValue(child, node->visits);
+        if (val > bestVal) {
+            bestVal = val;
+            bestChild = child;
+        }
+    }
+    return bestChild;
+}
+int SearchEngine::rollout(Board simulationBoard){
+        const int rolloutDepth = 10;
+        for (int i = 0; i < rolloutDepth; i++) {
+            std::vector<Move> moves = this->generateLegalMoves(simulationBoard);
+            if (moves.empty())
+                break;
+            int idx = std::rand() % moves.size();
+            simulationBoard.implementMove(const_cast<Move*>(&moves[idx]));
+        }
+        return simulationBoard.basic_evaluate();
+}
+void SearchEngine::backpropagate(TreeNode* node, double result){
+    while (node) {
+        node->visits++;
+        node->totalValue += result;
+        node = node->parent;
+    }
+}
+void SearchEngine::populateBestMoveMCTSSearch(Board* board){
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    TreeNode* root = new TreeNode(*board);
+    root->untriedMoves = generateLegalMoves(*board);
+
+    const int ITERATIONS = 1000;
+    for (int i = 0; i < ITERATIONS; i++) {
+        TreeNode* node = root;
+        Board* simulationBoard = &root->board;
+        while (node->untriedMoves.empty() && !node->children.empty()) {
+            node = selectChild(node);
+            simulationBoard = &node->board;
+        }
+        if (!node->untriedMoves.empty()) {
+            Move m = node->untriedMoves.back();
+            node->untriedMoves.pop_back();
+            simulationBoard->implementMove(&m);
+            TreeNode* child = new TreeNode(*simulationBoard, node);
+            child->move = m;
+            child->untriedMoves = generateLegalMoves(*simulationBoard);
+            node->children.push_back(child);
+            node = child;
+        }
+        double result = rollout(*simulationBoard);
+        backpropagate(node, result);
+    }
+    TreeNode* bestChild = nullptr;
+    int bestVisits = -1;
+    for (TreeNode* child : root->children) {
+        if (child->visits > bestVisits) {
+            bestVisits = child->visits;
+            bestChild = child;
+        }
+    }
+
+    if (bestChild) {
+        int fromCol = bestChild->move.fromSquare % 8;
+        int fromRow = bestChild->move.fromSquare / 8;
+        int toCol = bestChild->move.toSquare % 8;
+        int toRow = bestChild->move.toSquare / 8;
+        char moveStr[6];
+        moveStr[0] = 'a' + fromCol;
+        moveStr[1] = '8' - fromRow;
+        moveStr[2] = 'a' + toCol;
+        moveStr[3] = '8' - toRow;
+        moveStr[4] = '\0';
+        printf("bestmove %s\n", moveStr);
+    } else {
+        printf("bestmove (none)\n");
+    }
+    delete root;
+}
+void SearchEngine::populateBestMoveMCTS_IR_M(Board* board){
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    TreeNode* root = new TreeNode(*board);
+    root->untriedMoves = generateLegalMoves(*board);
+
+    const int ITERATIONS = 1000;
+    for (int i = 0; i < ITERATIONS; i++) {
+        TreeNode* node = root;
+        Board* simulationBoard = &root->board;
+        while (node->untriedMoves.empty() && !node->children.empty()) {
+            node = selectChild(node);
+            simulationBoard = &node->board;
+        }
+        if (!node->untriedMoves.empty()) {
+            Move m = node->untriedMoves.back();
+            node->untriedMoves.pop_back();
+            simulationBoard->implementMove(&m);
+            TreeNode* child = new TreeNode(*simulationBoard, node);
+            child->move = m;
+            child->untriedMoves = generateLegalMoves(*simulationBoard);
+            node->children.push_back(child);
+            node = child;
+        }
+        double result = rollout_IR_M(*simulationBoard);
+        backpropagate(node, result);
+    }
+    printBestMoveFromRoot(root);
+    delete root;
+}

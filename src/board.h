@@ -38,11 +38,7 @@ class Board{
         BitBoard board_squares[64];
         BitBoard get_pawn_white_right(int sq);
         BitBoard get_pawn_white_left(int sq);
-        int basic_evaluate(BitBoard white_pawns, BitBoard black_pawns,
-            BitBoard white_knights, BitBoard black_knights,
-            BitBoard white_bishops, BitBoard black_bishops,
-            BitBoard white_rooks, BitBoard black_rooks,
-            BitBoard white_queens, BitBoard black_queens);
+        int basic_evaluate();
         BitBoard get_pawn_attacks(int sq, bool whiteToPlay);
         BitBoard get_knight_attacks(int square);
         BitBoard get_king_attacks(int square);

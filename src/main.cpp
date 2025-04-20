@@ -38,7 +38,25 @@ int main(){
             board->parsePosition("position startpos");
         }
         else if (strncmp(input, "go", 2) == 0){
-            searchEngine->populateBestMoveMinimaxSearch(board);
+            #ifdef USE_MINIMAX
+                searchEngine->populateBestMoveMinimaxSearch(board);
+            #elif defined(USE_MCTS)
+                searchEngine->populateBestMoveMCTSSearch(board);
+            #elif defined(USE_MCTS_IR)
+                searchEngine->populateBestMoveMCTS_IR_M(board);
+            #elif defined(USE_MCTS_IC)
+                searchEngine->populateBestMoveMCTS_IC_M(board);
+            #elif defined(USE_MCTS_IP)
+                searchEngine->populateBestMoveMCTS_IP_M(board);
+            #endif
+        }
+        else if (strncmp(input,"quit",4) == 0){
+            break;
+        }
+        else if(strncmp(input,"uci",3) == 0){
+            printf("id name HybridEngine\n");
+            printf("id author Pratik\n");
+            printf("uciok\n");
         }
 
     }

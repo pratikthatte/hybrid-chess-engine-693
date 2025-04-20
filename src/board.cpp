@@ -591,12 +591,8 @@ BitBoard Board::get_pawn_white_right(int sq){
 BitBoard Board::get_pawn_white_left(int sq){
     return moveEngine.get_pawn_white_left(sq);
 }
-int Board::basic_evaluate(BitBoard white_pawns, BitBoard black_pawns,
-    BitBoard white_knights, BitBoard black_knights,
-    BitBoard white_bishops, BitBoard black_bishops,
-    BitBoard white_rooks, BitBoard black_rooks,
-    BitBoard white_queens, BitBoard black_queens){
-        return evaluationEngine.basic_evaluate(white_pawn,black_pawn,white_knights,black_knights,white_bishops, black_bishops, white_rooks, black_rooks,white_queen, black_queen);
+int Board::basic_evaluate(){
+        return evaluationEngine.basic_evaluate(this->white_pawn,this->black_pawn,this->white_knight,this->black_knight,this->white_bishop, this->black_bishop, this->white_rook, this->black_rook, this->white_queen, this->black_queen);
 }
 BitBoard Board::get_pawn_attacks(int sq, bool whiteToPlay){
     return moveEngine.get_pawn_attacks(sq,whiteToPlay);
