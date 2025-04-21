@@ -15,6 +15,7 @@ public:
     void populateBestMoveMCTS_IR_M(Board* board);
     void populateBestMoveMCTS_IC_M(Board* board);
     void populateBestMoveMCTS_IP_M(Board* board);
+    std::vector<Move> generateLegalMoves(Board &board);
 private:
     struct TreeNode {
         Board board;    
@@ -23,6 +24,7 @@ private:
         std::vector<TreeNode*> children;
         std::vector<Move> untriedMoves;
         int visits;
+        int wins;
         double totalValue;
         TreeNode(Board b, TreeNode* parent = nullptr)
             : board(b), parent(parent), visits(0), totalValue(0) { }
@@ -33,7 +35,6 @@ private:
         }
     };
     int minimax(Board board, int depth, int alpha, int beta, bool maximizingPlayer);
-    std::vector<Move> generateLegalMoves(Board &board);
     int evaluateBoard(Board &board);
     Move addMove(Board &board, int fromSq, int toSq, Pieces piece);
     double uctValue(TreeNode* child, int parentVisits, double C);

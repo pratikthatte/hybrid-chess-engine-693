@@ -8,6 +8,7 @@
 #include <vector>
 #include <ctime>
 #include <cmath>
+#include <iostream>
 
 SearchEngine::SearchEngine() { }
 SearchEngine::~SearchEngine() { }
@@ -17,6 +18,7 @@ int SearchEngine::evaluateBoard(Board &board) {
 }
 
 std::vector<Move> SearchEngine::generateLegalMoves(Board &board) {
+    std::cout << "Entering legalmovesgeneration " << std::endl;
     std::vector<Move> moves;
     BitBoard ownOccupancy = board.turn==1 ? board.board_occupancy_white : board.board_occupancy_black;
     BitBoard enemyOccupancy = board.turn==1 ? board.board_occupancy_black : board.board_occupancy_white;
@@ -415,3 +417,145 @@ void SearchEngine::populateBestMoveMCTS_IR_M(Board* board){
     printBestMoveFromRoot(root);
     delete root;
 }
+double SearchEngine::rollout_IR_M(Board board){
+    while (true) {
+        std::vector<Move> legalMoves = generateLegalMoves(board);
+        if (legalMoves.empty()) {
+            break;
+        }
+        Move move = selectMoveByMinimax(board, 2);
+        board.implementMove(&move);
+    }
+    std::vector<Move> legalMoves = generateLegalMoves(board);
+    return board.getResult(legalMoves);
+}
+double SearchEngine::rollout_IC_M(Board board, int rolloutMoves = 3) {
+    for (int i = 0; i < rolloutMoves && !generateLegalMoves(board).empty(); i++) {
+        auto legal = generateLegalMoves(board);
+        if (legal.empty()) break;
+        Move move = legal[rand() % legal.size()];
+        board.implementMove(&move);
+    }
+    std::vector<Move> moves = generateLegalMoves(board);
+    if (moves.empty()) {
+        return board.getResult(moves);
+    } else {
+        int eval = minimax(board, 2, INT_MIN, INT_MAX, true);
+        return normalizeEvaluation(eval,-1000,1000);
+    }
+}
+void SearchEngine::populateBestMoveMCTS_IC_M(Board* board) {
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    TreeNode* root = new TreeNode(*board);
+    root->untriedMoves = generateLegalMoves(*board);
+
+    const int ITERATIONS = 1000;
+    for (int i = 0; i < ITERATIONS; i++) {
+        TreeNode* node = root;
+        Board* simulationBoard = &root->board;
+        while (node->untriedMoves.empty() && !node->children.empty()) {
+            node = selectChild(node);
+            simulationBoard = &node->board;
+        }
+        if (!node->untriedMoves.empty()) {
+            Move m = node->untriedMoves.back();
+            node->untriedMoves.pop_back();
+            simulationBoard->implementMove(&m);
+            TreeNode* child = new TreeNode(*simulationBoard, node);
+            child->move = m;
+            child->untriedMoves = generateLegalMoves(*simulationBoard);
+            node->children.push_back(child);
+            node = child;
+        }
+        double result = rollout_IC_M(*simulationBoard);
+        backpropagate(node, result);
+    }
+    printBestMoveFromRoot(root);
+    delete root;
+}
+void SearchEngine::populateBestMoveMCTS_IP_M(Board* board){
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    TreeNode* root = new TreeNode(*board);
+    root->untriedMoves = generateLegalMoves(*board);
+    initializeNodeWithMinimax(root,2,100);
+    const int ITERATIONS = 1000;
+    for (int i = 0; i < ITERATIONS; i++) {
+        TreeNode* node = root;
+        Board* simulationBoard = &root->board;
+        while (node->untriedMoves.empty() && !node->children.empty()) {
+            node = selectChild(node);
+            simulationBoard = &node->board;
+        }
+        if (!node->untriedMoves.empty()) {
+            Move m = node->untriedMoves.back();
+            node->untriedMoves.pop_back();
+            node = expandChildWithMinimax(node, m);
+            simulationBoard = &node->board;
+        }
+        double result = rollout(*simulationBoard);
+        backpropagate(node, result);
+    }
+    printBestMoveFromRoot(root);
+    delete root;
+}
+double SearchEngine::normalizeEvaluation(int eval, int minEval=-1000, int maxEval=1000){
+    return (double)(eval - minEval) / (maxEval - minEval);
+}
+Move SearchEngine::selectMoveByMinimax(Board &board, int depth){
+    std::vector<Move> legalMoves = generateLegalMoves(board);
+    Move bestMove = legalMoves[0];
+    int bestEval = INT_MIN;
+    for (const Move& move : legalMoves) {
+        Board copy = board;
+        copy.implementMove(const_cast<Move*>(&move));
+        int eval = minimax(copy, depth - 1, INT_MIN, INT_MAX, false);
+        if (eval > bestEval) {
+            bestEval = eval;
+            bestMove = move;
+        }
+    }
+    return bestMove;
+}
+void SearchEngine::initializeNodeWithMinimax(TreeNode* node, int depth = 2, int gamma = 100) {
+    int eval = minimax(node->board, depth, INT_MIN, INT_MAX, true);
+    double normEval = normalizeEvaluation(eval,-1000,1000);
+    node->visits += gamma;
+    node->wins += gamma * normEval;
+}
+SearchEngine::TreeNode* SearchEngine::expandChildWithMinimax(TreeNode* parent, Move move) {
+    Board nextBoard = parent->board;
+    nextBoard.implementMove(&move);
+    TreeNode* child = new TreeNode(nextBoard, parent);
+    child->move = move;
+    child->untriedMoves = generateLegalMoves(nextBoard);
+    initializeNodeWithMinimax(child);
+    parent->children.push_back(child);
+    return child;
+}
+void SearchEngine::printBestMoveFromRoot(TreeNode* root) {
+    TreeNode* bestChild = nullptr;
+    int bestVisits = -1;
+    for (TreeNode* child : root->children) {
+        if (child->visits > bestVisits) {
+            bestVisits = child->visits;
+            bestChild = child;
+        }
+    }
+    if (bestChild) {
+        int fromCol = bestChild->move.fromSquare % 8;
+        int fromRow = bestChild->move.fromSquare / 8;
+        int toCol = bestChild->move.toSquare % 8;
+        int toRow = bestChild->move.toSquare / 8;
+        char moveStr[6];
+        moveStr[0] = 'a' + fromCol;
+        moveStr[1] = '8' - fromRow;
+        moveStr[2] = 'a' + toCol;
+        moveStr[3] = '8' - toRow;
+        moveStr[4] = '\0';
+        printf("bestmove %s\n", moveStr);
+    } else {
+        printf("bestmove (none)\n");
+    }
+}
+
+

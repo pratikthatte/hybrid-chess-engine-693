@@ -2,6 +2,7 @@
 #define BOARD_H
 #include "typedefs.h"
 #include <unordered_map>
+#include <vector>
 
 class EvaluationEngine;
 class MoveGenerationEngine;
@@ -13,7 +14,6 @@ class Board{
         BitBoard generate_random_bitboard();
         void init_zobrist_hashing();
         void parsePosition(char* command);
-        void getBestMove();
         BitBoard black_pawn;
         BitBoard white_pawn;
         BitBoard black_knight;
@@ -46,6 +46,7 @@ class Board{
         BitBoard get_rook_attacks(int square, BitBoard occupied);
         BitBoard get_queen_attacks(int square, BitBoard occupied);
         void implementMove(Move* temp_move);
+        int getResult(std::vector<Move>& legalMoves);
     private:
         MoveGenerationEngine& moveEngine;
         EvaluationEngine& evaluationEngine;

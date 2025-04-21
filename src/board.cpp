@@ -2,6 +2,7 @@
 #include <stdlib.h>  
 #include <ctype.h>
 #include <cstring>
+#include <iostream>
 #include "move.h"
 #include "evaluation.h"
 Board::Board(MoveGenerationEngine& moveEngine, EvaluationEngine& evaluationEngine):moveEngine(moveEngine),evaluationEngine(evaluationEngine){
@@ -52,12 +53,14 @@ void Board::init_zobrist_hashing(){
     this->zobrist_white_to_move = generate_random_bitboard();
 }
 void Board::parsePosition(char* command){
+    std::cout<<"Inside ParsePosition with command: "<<command<<std::endl;
     command += 9;
     if (strstr(command, "fen")) {
         char* fen = strstr(command, "fen") + 4;
         this->evaluateFen(fen);
     }
     else if(strstr(command, "startpos")){
+        std::cout<<"Inside startpos loop"<<std::endl;
         this->evaluateFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     }
     if(strstr(command,"moves")){
@@ -70,6 +73,7 @@ void Board::parsePosition(char* command){
     }
 }
 void Board::evaluateFen(char* fen){
+    std::cout<<"Inside evaluate FEN"<<std::endl;
     resetBoard();
     int row = 0;
     int col = 0;
@@ -167,6 +171,7 @@ BitBoard* Board::getPieceBitBoard(int piece){
     }
 }
 void Board::resetBoard(){
+    std::cout<<"Inside reset board"<<std::endl;
     this->black_pawn = 0LL;
     this->white_pawn = 0LL;
     this->black_knight = 0LL;
@@ -612,3 +617,94 @@ BitBoard Board::get_rook_attacks(int square, BitBoard occupied){
 BitBoard Board::get_queen_attacks(int square, BitBoard occupied){
     return moveEngine.get_queen_attacks(square,occupied);
 }
+int Board::getResult(std::vector<Move>& legalMoves) {
+    if (!legalMoves.empty()) {
+        return basic_evaluate();
+    }
+    BitBoard enemyAttackMask = 0LL; 
+    if (this->turn == 1) {
+        BitBoard temp = black_pawn;
+        while (temp) {
+            int sq = __builtin_ctzll(temp);
+            enemyAttackMask |= moveEngine.get_pawn_attacks(sq, false);
+            temp &= temp - 1;
+        }
+        temp = black_knight;
+        while (temp) {
+            int sq = __builtin_ctzll(temp);
+            enemyAttackMask |= moveEngine.get_knight_attacks(sq);
+            temp &= temp - 1;
+        }
+        temp = black_bishop;
+        while (temp) {
+            int sq = __builtin_ctzll(temp);
+            enemyAttackMask |= moveEngine.get_bishop_attacks(sq, board_occupancy);
+            temp &= temp - 1;
+        }
+        temp = black_rook;
+        while (temp) {
+            int sq = __builtin_ctzll(temp);
+            enemyAttackMask |= moveEngine.get_rook_attacks(sq, board_occupancy);
+            temp &= temp - 1;
+        }
+        temp = black_queen;
+        while (temp) {
+            int sq = __builtin_ctzll(temp);
+            enemyAttackMask |= moveEngine.get_queen_attacks(sq, board_occupancy);
+            temp &= temp - 1;
+        }
+        temp = black_king;
+        while (temp) {
+            int sq = __builtin_ctzll(temp);
+            enemyAttackMask |= moveEngine.get_king_attacks(sq);
+            temp &= temp - 1;
+        }
+        if (enemyAttackMask & board_squares[whiteKingSq])
+            return -100000;
+        else
+            return 0;
+    }
+    else {
+        BitBoard temp = white_pawn;
+        while (temp) {
+            int sq = __builtin_ctzll(temp);
+            enemyAttackMask |= moveEngine.get_pawn_attacks(sq, true);
+            temp &= temp - 1;
+        }
+        temp = white_knight;
+        while (temp) {
+            int sq = __builtin_ctzll(temp);
+            enemyAttackMask |= moveEngine.get_knight_attacks(sq);
+            temp &= temp - 1;
+        }
+        temp = white_bishop;
+        while (temp) {
+            int sq = __builtin_ctzll(temp);
+            enemyAttackMask |= moveEngine.get_bishop_attacks(sq, board_occupancy);
+            temp &= temp - 1;
+        }
+        temp = white_rook;
+        while (temp) {
+            int sq = __builtin_ctzll(temp);
+            enemyAttackMask |= moveEngine.get_rook_attacks(sq, board_occupancy);
+            temp &= temp - 1;
+        }
+        temp = white_queen;
+        while (temp) {
+            int sq = __builtin_ctzll(temp);
+            enemyAttackMask |= moveEngine.get_queen_attacks(sq, board_occupancy);
+            temp &= temp - 1;
+        }
+        temp = white_king;
+        while (temp) {
+            int sq = __builtin_ctzll(temp);
+            enemyAttackMask |= moveEngine.get_king_attacks(sq);
+            temp &= temp - 1;
+        }
+        if (enemyAttackMask & board_squares[blackKingSq])
+            return 100000;
+        else
+            return 0;
+    }
+}
+
