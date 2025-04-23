@@ -2,8 +2,9 @@
 #define MOVE_H
 
 #include <array>
+#include <vector>
 #include "typedefs.h"
-
+#include <string>
 class MoveGenerationEngine {
 public:
     MoveGenerationEngine();
@@ -30,8 +31,8 @@ private:
     std::array<int, 64> rook_number_of_reachable_squares;
     std::array<BitBoard, 64> bishop_magic_square_values;
     std::array<BitBoard, 64> rook_magic_square_values;
-    std::array<std::array<BitBoard, 512>, 64> bishop_attack_masks;
-    std::array<std::array<BitBoard, 4096>, 64> rook_attack_masks;
+    std::vector<std::vector<BitBoard>> bishop_attack_masks;
+    std::vector<std::vector<BitBoard>> rook_attack_masks;
     void generate_knight_movement();
     void generate_king_movement();
     void generate_pawn_movement();
@@ -44,5 +45,9 @@ private:
                                   BitBoard future_moves);
     BitBoard generate_bishop_attacks_with_obstacles(int sq, BitBoard obstacle_map);
     BitBoard generate_rook_attacks_with_obstacles(int sq, BitBoard obstacle_map);
+    void save_rook_masks_to_file(const std::string& filename);
+    bool load_rook_masks_from_file(const std::string& filename);
+    void save_bishop_masks_to_file(const std::string& filename);
+    bool load_bishop_masks_from_file(const std::string& filename);
 };
 #endif

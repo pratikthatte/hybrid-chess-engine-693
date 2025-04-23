@@ -3,6 +3,8 @@
 #include "typedefs.h"
 #include <unordered_map>
 #include <vector>
+#include <array>
+#include <string>
 
 class EvaluationEngine;
 class MoveGenerationEngine;
@@ -47,11 +49,13 @@ class Board{
         BitBoard get_queen_attacks(int square, BitBoard occupied);
         void implementMove(Move* temp_move);
         int getResult(std::vector<Move>& legalMoves);
+        BitBoard board_attack_mask;
+        std::string getFEN();
+        void generateAttackMasks();
+        int castling;
     private:
         MoveGenerationEngine& moveEngine;
         EvaluationEngine& evaluationEngine;
-        BitBoard board_attack_mask;
-        int castling;
         int halfMoveCount;
         int fullMoveCount;
         char* fen_string;
@@ -66,7 +70,6 @@ class Board{
         void generateOccupancyMask();
         void generateBoardHash();
         void computeHashAgainstPiece(BitBoard* hash, BitBoard piece, int& index);
-        void generateAttackMasks();
         void makeMove(char* moves);
         void populateMove(char* moves, Move* move);
         void makeEnPassantMove(Move* move);
@@ -74,5 +77,6 @@ class Board{
         std::unordered_map<Pieces,int> piece_value_map;
         void init_piece_value_map();
         void compareTempBBWithRookAndCastleChanges(BitBoard bb, BitBoard rook, Move* move);
+        char pieceToChar(int piece);
 };
 #endif

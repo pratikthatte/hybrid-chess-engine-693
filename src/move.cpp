@@ -1,6 +1,13 @@
 #include "move.h"
-
+#include <iostream>
+#include <cstdio>
+#include <fstream>
 MoveGenerationEngine::MoveGenerationEngine(){
+    this->bishop_attack_masks.resize(64, std::vector<BitBoard>(512, 0));
+    this->rook_attack_masks.reserve(64);
+    for (int i = 0; i < 64; ++i) {
+        this->rook_attack_masks.emplace_back(4096, 0);
+    }
     this->bishop_number_of_reachable_squares = {
         6, 5, 5, 5, 5, 5, 5, 6,
         5, 5, 5, 5, 5, 5, 5, 5,
@@ -153,6 +160,21 @@ MoveGenerationEngine::MoveGenerationEngine(){
         0x4000011008020084ULL,
         0x26002114058042ULL
     };
+
+    if (load_rook_masks_from_file("rook_masks.bin")) {
+        std::cout<<"Found rook_masks BIN"<<std::endl;
+    } 
+    else {
+        generate_obstacle_based_rook_movement();
+        save_rook_masks_to_file("rook_masks.bin");
+    }
+    if (load_bishop_masks_from_file("bishop_masks.bin")) {
+        std::cout<<"Found bishop_mask BIN"<<std::endl;
+    } 
+    else {
+        generate_obstacle_based_bishop_movement();
+        save_bishop_masks_to_file("bishop_masks.bin");
+    }
     this->generate_knight_movement();
     this->generate_king_movement();
     this->generate_pawn_movement();
@@ -172,14 +194,16 @@ BitBoard MoveGenerationEngine::get_pawn_attacks(int square, bool is_white) {
 }
 BitBoard MoveGenerationEngine::get_bishop_attacks(int square, BitBoard occupied) {
     BitBoard obstacles = occupied & bishop_movement[square];
-    BitBoard magic_index = (obstacles * bishop_magic_square_values[square]) >> 
-                          (64 - bishop_number_of_reachable_squares[square]);
+    BitBoard magic_index = (obstacles * bishop_magic_square_values[square]) >>
+                        (64 - bishop_number_of_reachable_squares[square]);
+    magic_index &= (1ULL << bishop_number_of_reachable_squares[square]) - 1;
     return bishop_attack_masks[square][magic_index];
 }
 BitBoard MoveGenerationEngine::get_rook_attacks(int square, BitBoard occupied) {
     BitBoard obstacles = occupied & rook_movement[square];
     BitBoard magic_index = (obstacles * rook_magic_square_values[square]) >> 
                           (64 - rook_number_of_reachable_squares[square]);
+                          magic_index &= (1ULL << rook_number_of_reachable_squares[square]) - 1;
     return rook_attack_masks[square][magic_index];
 }
 BitBoard MoveGenerationEngine::get_queen_attacks(int square, BitBoard occupied){
@@ -234,69 +258,52 @@ void MoveGenerationEngine::generate_pawn_movement(){
         this->black_pawn_right_movement[sq] = temp_bb;
     }
 }
-void MoveGenerationEngine::generate_bishop_movement(){
-    for(int sq=0;sq<64;sq++){
-        BitBoard temp_bb = 0LL;
-        int temp_up_left_diagonal_sq = sq;
-        int temp_up_right_diagonal_sq = sq;
-        int temp_down_left_diagonal_sq = sq;
-        int temp_down_right_diagonal_sq = sq;
-        int temp_col = sq%8;
-        int temp_row = sq/8;
-        while(true){
-            temp_up_left_diagonal_sq = sq-9;
-            if(temp_up_left_diagonal_sq<0){
-                break;
+void MoveGenerationEngine::generate_bishop_movement() {
+    for (int sq = 0; sq < 64; sq++) {
+        BitBoard temp_bb = 0ULL;
+        int col = sq % 8;
+        int row = sq / 8;
+        {
+            int r = row - 1;
+            int c = col - 1;
+            while (r >= 0 && c >= 0) {
+                int target = r * 8 + c;
+                temp_bb |= 1ULL << target;
+                r--;
+                c--;
             }
-            if(temp_up_left_diagonal_sq%8!=temp_col-1 || temp_up_left_diagonal_sq/8!=temp_row-1){
-                break;
-            }
-            temp_col = temp_up_left_diagonal_sq%8;
-            temp_row = temp_up_left_diagonal_sq/8;
-            temp_bb |= 1LL << (temp_up_left_diagonal_sq);
         }
-        temp_col = sq%8;
-        temp_row = sq/8;
-        while(true){
-            temp_up_right_diagonal_sq = sq-7;
-            if(temp_up_right_diagonal_sq<0){
-                break;
+        {
+            int r = row - 1;
+            int c = col + 1;
+            while (r >= 0 && c < 8) {
+                int target = r * 8 + c;
+                temp_bb |= 1ULL << target;
+                r--;
+                c++;
             }
-            if(temp_up_right_diagonal_sq%8!=temp_col+1 || temp_up_right_diagonal_sq/8!=temp_row-1){
-                break;
-            }
-            temp_col = temp_up_right_diagonal_sq%8;
-            temp_row = temp_up_right_diagonal_sq/8;
-            temp_bb |= 1LL << (temp_up_right_diagonal_sq);
         }
-        temp_col = sq%8;
-        temp_row = sq/8;
-        while(true){
-            temp_down_right_diagonal_sq = sq+97;
-            if(temp_down_right_diagonal_sq>63){
-                break;
+        {
+            int r = row + 1;
+            int c = col + 1;
+            while (r < 8 && c < 8) {
+                int target = r * 8 + c;
+                temp_bb |= 1ULL << target;
+                r++;
+                c++;
             }
-            if(temp_down_right_diagonal_sq%8!=temp_col+1 || temp_down_right_diagonal_sq/8!=temp_row+1){
-                break;
-            }
-            temp_col = temp_down_right_diagonal_sq%8;
-            temp_row = temp_down_right_diagonal_sq/8;
-            temp_bb |= 1LL << (temp_down_right_diagonal_sq);
         }
-        temp_col = sq%8;
-        temp_row = sq/8;
-        while(true){
-            temp_down_left_diagonal_sq = sq+7;
-            if(temp_down_left_diagonal_sq>63){
-                break;
+        {
+            int r = row + 1;
+            int c = col - 1;
+            while (r < 8 && c >= 0) {
+                int target = r * 8 + c;
+                temp_bb |= 1ULL << target;
+                r++;
+                c--;
             }
-            if(temp_down_left_diagonal_sq%8!=temp_col-1 || temp_down_left_diagonal_sq/8!=temp_row+1){
-                break;
-            }
-            temp_col = temp_down_left_diagonal_sq%8;
-            temp_row = temp_down_left_diagonal_sq/8;
-            temp_bb |= 1LL << (temp_down_left_diagonal_sq);
         }
+
         this->bishop_movement[sq] = temp_bb;
     }
 }
@@ -313,13 +320,13 @@ void MoveGenerationEngine::generate_rook_movement(){
             temp_bb |= 1LL << temp_sq;
             temp_sq += 8;
         }
-        temp_sq = sq-1;
-        while(temp_sq%8>=0){
+        temp_sq = sq - 1;
+        while (temp_sq >= 0 && temp_sq / 8 == sq / 8){
             temp_bb |= 1LL << temp_sq;
             temp_sq--;
         }
-        temp_sq = sq+1;
-        while(temp_sq%8<=7){
+        temp_sq = sq + 1;
+        while (temp_sq < 64 && temp_sq / 8 == sq / 8){
             temp_bb |= 1LL << temp_sq;
             temp_sq++;
         }
@@ -328,17 +335,20 @@ void MoveGenerationEngine::generate_rook_movement(){
 }
 void MoveGenerationEngine::generate_obstacle_based_bishop_movement(){
     this->generate_bishop_movement();
-    for(int sq=0;sq<64;sq++){
+    for (int sq = 0; sq < 64; sq++){
         BitBoard bishop_future_moves = this->bishop_movement[sq];
         int number_of_reachable_squares = bishop_number_of_reachable_squares[sq];
         int number_of_reachable_square_combinations = 1LL << number_of_reachable_squares;
-        for(int i=0;i<number_of_reachable_square_combinations;i++){
-            BitBoard obstacle_map = generate_obstacle_map(i,number_of_reachable_squares,bishop_future_moves);
-            BitBoard magic_index = (obstacle_map * this->bishop_magic_square_values[sq]) >> (64-number_of_reachable_squares);
-            this->bishop_attack_masks[sq][magic_index] = generate_bishop_attacks_with_obstacles(sq,obstacle_map);
+        for (int i = 0; i < number_of_reachable_square_combinations; i++){
+            BitBoard obstacle_map = generate_obstacle_map(i, number_of_reachable_squares, bishop_future_moves);
+            BitBoard magic_index = (obstacle_map * this->bishop_magic_square_values[sq]) >>
+                                   (64 - number_of_reachable_squares);
+            magic_index &= (1ULL << number_of_reachable_squares) - 1;
+            this->bishop_attack_masks[sq][magic_index] = generate_bishop_attacks_with_obstacles(sq, obstacle_map);
         }
     }
 }
+
 void MoveGenerationEngine::generate_obstacle_based_rook_movement(){
     this->generate_rook_movement();
     for(int sq=0;sq<64;sq++){
@@ -348,13 +358,14 @@ void MoveGenerationEngine::generate_obstacle_based_rook_movement(){
         for(int i=0;i<number_of_reachable_square_combinations;i++){
             BitBoard obstacle_map = generate_obstacle_map(i,number_of_reachable_squares,future_rook_moves);
             BitBoard magic_index = (obstacle_map * this->rook_magic_square_values[sq]) >> (64-number_of_reachable_squares);
+            magic_index &= (1ULL << number_of_reachable_squares) - 1;
             this->rook_attack_masks[sq][magic_index] = this->generate_rook_attacks_with_obstacles(sq,obstacle_map);
         }
     }
 }
 BitBoard MoveGenerationEngine::generate_obstacle_map(int current_obstacle_combination, int number_of_bits, BitBoard future_moves){
     BitBoard obstacle_map = 0LL;
-    for(int temp_bit = 0; temp_bit <= number_of_bits;temp_bit++){
+    for(int temp_bit = 0; temp_bit < number_of_bits;temp_bit++){
         int occupied_square = __builtin_ctzll(future_moves);
         future_moves = future_moves ^ (1LL << occupied_square);
         if (current_obstacle_combination & (1<<temp_bit)){
@@ -399,7 +410,7 @@ BitBoard MoveGenerationEngine::generate_bishop_attacks_with_obstacles(int sq, Bi
         temp_col = temp_up_right_diagonal_sq%8;
         temp_row = temp_up_right_diagonal_sq/8;
         temp_bb |= 1LL << (temp_up_right_diagonal_sq);
-        if(obstacle_map & (1LL << (temp_up_left_diagonal_sq))){
+        if(obstacle_map & (1LL << (temp_up_right_diagonal_sq))){
             break;
         }
     }
@@ -416,7 +427,7 @@ BitBoard MoveGenerationEngine::generate_bishop_attacks_with_obstacles(int sq, Bi
         temp_col = temp_down_right_diagonal_sq%8;
         temp_row = temp_down_right_diagonal_sq/8;
         temp_bb |= 1LL << (temp_down_right_diagonal_sq);
-        if(obstacle_map & (1LL << (temp_up_left_diagonal_sq))){
+        if(obstacle_map & (1LL << (temp_down_right_diagonal_sq))){
             break;
         }
     }
@@ -433,46 +444,47 @@ BitBoard MoveGenerationEngine::generate_bishop_attacks_with_obstacles(int sq, Bi
         temp_col = temp_down_left_diagonal_sq%8;
         temp_row = temp_down_left_diagonal_sq/8;
         temp_bb |= 1LL << (temp_down_left_diagonal_sq);
-        if(obstacle_map & (1LL << (temp_up_left_diagonal_sq))){
+        if(obstacle_map & (1LL << (temp_down_left_diagonal_sq))){
             break;
         }
     }
     return temp_bb;
 }
-BitBoard MoveGenerationEngine::generate_rook_attacks_with_obstacles(int sq, BitBoard obstacle_map){
+BitBoard MoveGenerationEngine::generate_rook_attacks_with_obstacles(int sq, BitBoard obstacle_map) {
     BitBoard temp_bb = 0LL;
-    int temp_sq = sq-8;
-    while(temp_sq>=0){
+
+    // Up
+    int temp_sq = sq - 8;
+    while (temp_sq >= 0) {
         temp_bb |= 1LL << temp_sq;
-        if(obstacle_map &= 1LL << temp_sq){
-            break;
-        }
+        if (obstacle_map & (1LL << temp_sq)) break;
         temp_sq -= 8;
     }
-    temp_sq = sq+8;
-    while(temp_sq<64){
+
+    // Down
+    temp_sq = sq + 8;
+    while (temp_sq < 64) {
         temp_bb |= 1LL << temp_sq;
-        if(obstacle_map &= 1LL << temp_sq){
-            break;
-        }
+        if (obstacle_map & (1LL << temp_sq)) break;
         temp_sq += 8;
     }
-    temp_sq = sq-1;
-    while(temp_sq%8>=0){
+
+    // Left
+    temp_sq = sq - 1;
+    while (temp_sq >= 0 && temp_sq / 8 == sq / 8) {
         temp_bb |= 1LL << temp_sq;
-        if(obstacle_map &= 1LL << temp_sq){
-            break;
-        }
+        if (obstacle_map & (1LL << temp_sq)) break;
         temp_sq--;
     }
-    temp_sq = sq+1;
-    while(temp_sq%8<=7){
+
+    // Right
+    temp_sq = sq + 1;
+    while (temp_sq < 64 && temp_sq / 8 == sq / 8) {
         temp_bb |= 1LL << temp_sq;
-        if(obstacle_map &= 1LL << temp_sq){
-            break;
-        }
+        if (obstacle_map & (1LL << temp_sq)) break;
         temp_sq++;
     }
+
     return temp_bb;
 }
 BitBoard MoveGenerationEngine::get_pawn_white_right(int sq){
@@ -481,4 +493,39 @@ BitBoard MoveGenerationEngine::get_pawn_white_right(int sq){
 BitBoard MoveGenerationEngine::get_pawn_white_left(int sq){
     return white_pawn_left_movement[sq];
 }
+void MoveGenerationEngine::save_rook_masks_to_file(const std::string& filename) {
+    std::ofstream out(filename, std::ios::binary);
+    for (int sq = 0; sq < 64; sq++) {
+        out.write(reinterpret_cast<const char*>(rook_attack_masks[sq].data()), 4096 * sizeof(BitBoard));
+    }
+    out.close();
+}
+bool MoveGenerationEngine::load_rook_masks_from_file(const std::string& filename) {
+    std::ifstream in(filename, std::ios::binary);
+    if (!in.is_open()) return false;
+    rook_attack_masks.resize(64, std::vector<BitBoard>(4096));
+    for (int sq = 0; sq < 64; sq++) {
+        in.read(reinterpret_cast<char*>(rook_attack_masks[sq].data()), 4096 * sizeof(BitBoard));
+    }
+    in.close();
+    return true;
+}
+void MoveGenerationEngine::save_bishop_masks_to_file(const std::string& filename) {
+    std::ofstream out(filename, std::ios::binary);
+    for (int sq = 0; sq < 64; sq++) {
+        out.write(reinterpret_cast<const char*>(bishop_attack_masks[sq].data()), 512 * sizeof(BitBoard));
+    }
+    out.close();
+}
+bool MoveGenerationEngine::load_bishop_masks_from_file(const std::string& filename) {
+    std::ifstream in(filename, std::ios::binary);
+    if (!in.is_open()) return false;
+    bishop_attack_masks.resize(64, std::vector<BitBoard>(512));
+    for (int sq = 0; sq < 64; sq++) {
+        in.read(reinterpret_cast<char*>(bishop_attack_masks[sq].data()), 512 * sizeof(BitBoard));
+    }
+    in.close();
+    return true;
+}
+
 

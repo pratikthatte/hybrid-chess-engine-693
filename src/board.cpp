@@ -62,6 +62,7 @@ void Board::parsePosition(char* command){
     else if(strstr(command, "startpos")){
         std::cout<<"Inside startpos loop"<<std::endl;
         this->evaluateFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        std::cout<<"Exited evaluateFen"<<std::endl;
     }
     if(strstr(command,"moves")){
         char* moves = strstr(command, "moves")+6;
@@ -72,70 +73,92 @@ void Board::parsePosition(char* command){
         }
     }
 }
-void Board::evaluateFen(char* fen){
-    std::cout<<"Inside evaluate FEN"<<std::endl;
+void Board::evaluateFen(char* fen) {
+    std::cout << "Inside evaluate FEN" << std::endl;
     resetBoard();
-    int row = 0;
-    int col = 0;
-    int board_piece;
+    std::cout << "Exited reset board" << std::endl;
+
+    int row = 0, col = 0, board_piece;
     int fen_section = 0;
-    while(*fen && fen_section < 6){
+
+    while (*fen && fen_section < 6) {
         char c = *fen;
-        if (fen_section == 0) {
+    
+        if (fen_section == 0) { // piece placement
             if (c >= '1' && c <= '8') {
                 col += (c - '0');
-            } 
-            else if (c == '/') {
+            } else if (c == '/') {
                 row++;
                 col = 0;
-            } 
-            else {
+            } else if (c != ' ') {
                 board_piece = charToPiece(c);
                 if (board_piece != -1) {
                     int square = row * 8 + col;
                     BitBoard* temp_bb = getPieceBitBoard(board_piece);
                     *temp_bb |= 1ULL << square;
+                    std::cout << "For char "<<c<<" Bit board is: " << *temp_bb << std::endl;
                     col++;
                 }
             }
+            fen++;
         }
-        else if(fen_section==1){
-            this->turn = c=='w' ? 1 : -1;
+    
+        else if (fen_section == 1) { // turn
+            if (c == 'w') this->turn = 1;
+            else if (c == 'b') this->turn = -1;
+            while (*fen && *fen != ' ') fen++;
         }
-        else if(fen_section==2){
-            if(c=='K') this->castling |= 1;
-            if(c=='Q') this->castling |= 1<<1;
-            if(c=='k') this->castling |= 1<<2;
-            if(c=='q') this->castling |= 1<<3;
+    
+        else if (fen_section == 2) { // castling
+            while (*fen && *fen != ' ') {
+                if (*fen == 'K') this->castling |= 1;
+                else if (*fen == 'Q') this->castling |= 1 << 1;
+                else if (*fen == 'k') this->castling |= 1 << 2;
+                else if (*fen == 'q') this->castling |= 1 << 3;
+                fen++;
+            }
         }
-        else if(fen_section==3){
+    
+        else if (fen_section == 3) { // en passant
             if (c != '-') {
                 int epCol = tolower(c) - 'a';
                 fen++;
-                int epRow = (*fen - '1'); 
+                int epRow = *fen - '1';
                 this->enPassantSq = epRow * 8 + epCol;
             }
+            while (*fen && *fen != ' ') fen++;
         }
-        else if (fen_section == 4) {
+    
+        else if (fen_section == 4) { // halfmove clock
             this->halfMoveCount = atoi(fen);
             while (*fen && *fen != ' ') fen++;
-            continue;
         }
-        else if(fen_section == 5){
+    
+        else if (fen_section == 5) { // fullmove count
             this->fullMoveCount = atoi(fen);
             break;
         }
-        if (c == ' ') {
+    
+        // move to next section after a space
+        if (*fen == ' ') {
             fen_section++;
+            fen++;
         }
-        fen++;
     }
+    
     this->whiteKingSq = __builtin_ctzll(this->white_king);
     this->blackKingSq = __builtin_ctzll(this->black_king);
+    std::cout << "Entering generateOccupancymask" << std::endl;
     this->generateOccupancyMask();
+    std::cout << "Exiting generateOccupancymask" << std::endl;
+    std::cout << "Entering generateBoardHash" << std::endl;
     this->generateBoardHash();
+    std::cout << "Exiting generateBoardHash" << std::endl;
+    std::cout << "Entering generateAttackMasks" << std::endl;
     this->generateAttackMasks();
+    std::cout << "Exiting generateAttackMasks" << std::endl;
 }
+
 int Board::charToPiece(char c) {
     switch (c) {
         case 'P': return PAWN_W;
@@ -597,7 +620,7 @@ BitBoard Board::get_pawn_white_left(int sq){
     return moveEngine.get_pawn_white_left(sq);
 }
 int Board::basic_evaluate(){
-        return evaluationEngine.basic_evaluate(this->white_pawn,this->black_pawn,this->white_knight,this->black_knight,this->white_bishop, this->black_bishop, this->white_rook, this->black_rook, this->white_queen, this->black_queen);
+        return evaluationEngine.evaluate_position_with_king_safety_and_development(*this);
 }
 BitBoard Board::get_pawn_attacks(int sq, bool whiteToPlay){
     return moveEngine.get_pawn_attacks(sq,whiteToPlay);
@@ -707,4 +730,74 @@ int Board::getResult(std::vector<Move>& legalMoves) {
             return 0;
     }
 }
+std::string Board::getFEN() {
+    std::string fen;
+
+    for (int rank = 0; rank < 8; ++rank) {
+        int empty = 0;
+        for (int file = 0; file < 8; ++file) {
+            int square = rank * 8 + file;
+            char pieceChar = '.';
+
+            for (int p = PAWN_W; p <= KING_B; ++p) {
+                const BitBoard* bb = getPieceBitBoard(p);
+                if (*bb & (1ULL << square)) {
+                    pieceChar = pieceToChar(p);
+                    break;
+                }
+            }
+
+            if (pieceChar == '.') {
+                empty++;
+            } else {
+                if (empty > 0) {
+                    fen += std::to_string(empty);
+                    empty = 0;
+                }
+                fen += pieceChar;
+            }
+        }
+        if (empty > 0) fen += std::to_string(empty);
+        if (rank < 7) fen += '/';
+    }
+
+    fen += (turn == 1 ? " w " : " b ");
+
+    std::string castlingRights;
+    if (castling & 1) castlingRights += 'K';
+    if (castling & 2) castlingRights += 'Q';
+    if (castling & 4) castlingRights += 'k';
+    if (castling & 8) castlingRights += 'q';
+    fen += (castlingRights.empty() ? "-" : castlingRights) + " ";
+
+    if (enPassantSq != -1) {
+        fen += std::string(1, 'a' + (enPassantSq % 8)) + std::to_string(1 + (enPassantSq / 8)) + " ";
+    } else {
+        fen += "- ";
+    }
+
+    fen += std::to_string(halfMoveCount) + " ";
+
+    fen += std::to_string(fullMoveCount);
+
+    return fen;
+}
+char Board::pieceToChar(int piece) {
+    switch (piece) {
+        case PAWN_W: return 'P';
+        case KNIGHT_W: return 'N';
+        case BISHOP_W: return 'B';
+        case ROOK_W: return 'R';
+        case QUEEN_W: return 'Q';
+        case KING_W: return 'K';
+        case PAWN_B: return 'p';
+        case KNIGHT_B: return 'n';
+        case BISHOP_B: return 'b';
+        case ROOK_B: return 'r';
+        case QUEEN_B: return 'q';
+        case KING_B: return 'k';
+        default: return '.';
+    }
+}
+
 

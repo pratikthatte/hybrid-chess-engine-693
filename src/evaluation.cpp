@@ -1,6 +1,6 @@
 #include "evaluation.h"
 #include "typedefs.h"
-
+#include "board.h"
 EvaluationEngine::EvaluationEngine(){
     this->piece_value_map[PAWN_W] = 1;
     this->piece_value_map[PAWN_B] = -1;
@@ -123,7 +123,6 @@ int EvaluationEngine::calculate_number_of_pieces(BitBoard bb){
     }
     return count;
 }
-
 int EvaluationEngine::calculate_piece_position_values(BitBoard bb, std::array<int,64>& position_values){
     int score = 0;
     while (bb) {
@@ -132,4 +131,39 @@ int EvaluationEngine::calculate_piece_position_values(BitBoard bb, std::array<in
         bb &= (bb - 1);
     }
     return score;
+}
+int EvaluationEngine::evaluate_position_with_king_safety_and_development(Board& board) {
+    int eval = this->basic_evaluate(
+        board.white_pawn, board.black_pawn,
+        board.white_knight, board.black_knight,
+        board.white_bishop, board.black_bishop,
+        board.white_rook, board.black_rook,
+        board.white_queen, board.black_queen
+    );
+
+    int whiteKingSq = board.whiteKingSq;
+    int blackKingSq = board.blackKingSq;
+    BitBoard attackMask = board.board_attack_mask;
+
+    if (attackMask & (1ULL << whiteKingSq)) eval -= 50;
+    if (attackMask & (1ULL << blackKingSq)) eval += 50;
+
+    int whiteDeveloped = 0, blackDeveloped = 0;
+    BitBoard wPieces = board.white_knight | board.white_bishop | board.white_rook | board.white_queen;
+    BitBoard bPieces = board.black_knight | board.black_bishop | board.black_rook | board.black_queen;
+
+    while (wPieces) {
+        int sq = __builtin_ctzll(wPieces);
+        if (sq / 8 < 7) whiteDeveloped++; 
+        wPieces &= wPieces - 1;
+    }
+
+    while (bPieces) {
+        int sq = __builtin_ctzll(bPieces);
+        if (sq / 8 > 0) blackDeveloped++;
+        bPieces &= bPieces - 1;
+    }
+
+    eval += (whiteDeveloped - blackDeveloped) * 5;
+    return eval;
 }
