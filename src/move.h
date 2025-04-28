@@ -5,6 +5,7 @@
 #include <vector>
 #include "typedefs.h"
 #include <string>
+
 class MoveGenerationEngine {
 public:
     MoveGenerationEngine();
@@ -17,7 +18,6 @@ public:
     BitBoard get_queen_attacks(int square, BitBoard occupied);
     BitBoard get_pawn_white_right(int sq);
     BitBoard get_pawn_white_left(int sq);
-
 private:
     std::array<BitBoard, 64> knight_movement;
     std::array<BitBoard, 64> king_movement;
@@ -40,9 +40,7 @@ private:
     void generate_rook_movement();
     void generate_obstacle_based_bishop_movement();
     void generate_obstacle_based_rook_movement();
-    BitBoard generate_obstacle_map(int current_obstacle_combination, 
-                                  int number_of_bits, 
-                                  BitBoard future_moves);
+    BitBoard generate_obstacle_map(int current_obstacle_combination, int number_of_bits, BitBoard future_moves);
     BitBoard generate_bishop_attacks_with_obstacles(int sq, BitBoard obstacle_map);
     BitBoard generate_rook_attacks_with_obstacles(int sq, BitBoard obstacle_map);
     void save_rook_masks_to_file(const std::string& filename);
@@ -50,4 +48,5 @@ private:
     void save_bishop_masks_to_file(const std::string& filename);
     bool load_bishop_masks_from_file(const std::string& filename);
 };
+
 #endif

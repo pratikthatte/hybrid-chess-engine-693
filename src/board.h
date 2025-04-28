@@ -53,6 +53,9 @@ class Board{
         std::string getFEN();
         void generateAttackMasks();
         int castling;
+        bool isSquareAttacked(int sq, bool byWhite);
+        bool isKingInCheck(int color) const;
+        void generateOccupancyMask();
     private:
         MoveGenerationEngine& moveEngine;
         EvaluationEngine& evaluationEngine;
@@ -67,7 +70,6 @@ class Board{
         int charToPiece(char c);
         BitBoard* getPieceBitBoard(int piece);
         void resetBoard();
-        void generateOccupancyMask();
         void generateBoardHash();
         void computeHashAgainstPiece(BitBoard* hash, BitBoard piece, int& index);
         void makeMove(char* moves);

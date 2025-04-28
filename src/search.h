@@ -1,61 +1,36 @@
 #ifndef SEARCH_H
 #define SEARCH_H
-
-#include "board.h"
-#include "move.h"
 #include <vector>
+#include <chrono>
+#include <limits>
 #include <unordered_map>
+#include "board.h"
+#include "evaluation.h"
+#include "typedefs.h"
+enum NodeType { EXACT = 0, LOWERBOUND = 1, UPPERBOUND = 2 };
 
-static const int SEARCH_DEPTH = 3;
 class SearchEngine {
 public:
-    explicit SearchEngine( EvaluationEngine& evaluationEngine);
-    ~SearchEngine();
+    explicit SearchEngine(EvaluationEngine& engine);
+    void setTimeLimit(int ms);
     void populateBestMoveMinimaxSearch(Board* board);
-    void setTimeLimit(int ms) { timeLimitMs = ms; }
-    void populateBestMoveMCTSSearch(Board* board);
-    void populateBestMoveMCTS_IR_M(Board* board);
-    void populateBestMoveMCTS_IC_M(Board* board);
-    void populateBestMoveMCTS_IP_M(Board* board);
-    std::vector<Move> generateLegalMoves(Board &board);
-    std::vector<Move> filterLegalMoves(const Board &board, const std::vector<Move> &pseudoLegalMoves);
+    std::vector<Move> generateLegalMoves(Board& board);
+    std::vector<Move> filterLegalMoves(Board& board, const std::vector<Move>& moves);
+
 private:
-    int timeLimitMs = 300000;
-    EvaluationEngine& evaluationEngine;
-    std::unordered_map<BitBoard, TTEntry> transpositionTable;
-    struct TreeNode {
-        Board board;    
-        Move move;
-        TreeNode* parent;
-        std::vector<TreeNode*> children;
-        std::vector<Move> untriedMoves;
-        int visits;
-        int wins;
-        double totalValue;
-        TreeNode(Board b, TreeNode* parent = nullptr)
-            : board(b), parent(parent), visits(0), totalValue(0) { }
-        ~TreeNode() {
-            for (TreeNode* child : children) {
-                delete child;
-            }
-        }
-    };
-    int minimax(Board board, int depth, int alpha, int beta, bool maximizingPlayer);
-    int evaluateBoard(Board &board);
-    Move addMove(Board &board, int fromSq, int toSq, Pieces piece);
-    double uctValue(TreeNode* child, int parentVisits, double C);
-    TreeNode* selectChild(TreeNode* node);
-    int rollout(Board simulationBoard);
-    void backpropagate(TreeNode* node, double result);
-    double normalizeEvaluation(int eval, int minEval, int maxEval);
-    Move selectMoveByMinimax(Board &board, int depth);
-    double rollout_IR_M(Board board);
-    double rollout_IC_M(Board board, int rolloutMoves);
-    void initializeNodeWithMinimax(TreeNode* node, int depth, int gamma);
-    TreeNode* expandChildWithMinimax(TreeNode* parent, Move move);
-    void printBestMoveFromRoot(TreeNode* root);
-    int scoreMove(const Move& move);
-    void orderMoves(std::vector<Move>& moves);
+    static constexpr int MAX_PLY = 64;
+
+    EvaluationEngine& evalEngine;
+    int timeLimitMs;
+    int searchDepth;
+    std::unordered_map<BitBoard, TTEntry> ttTable;
+    Move killers[MAX_PLY][2];
+    int historyScores[64][64];
+
+    Move addMove(const Board& board, int from, int to, Pieces pieceType);
+    int negamax(Board& board, int depth, int alpha, int beta, Move& best, int ply=0);
+    std::string moveToUCI(const Move& m);
+    static int pieceValue(Pieces p);
 };
 
 #endif

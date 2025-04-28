@@ -41,15 +41,15 @@ def run_engine_and_test(path_to_engine):
     read_output_until("readyok")
 
     send("ucinewgame")
-    send("position startpos")
+    #send("position startpos")
+
+    #send("go movetime 300")
+    #lines = read_output_until("bestmove")
+
+    send("position fen 7k/8/8/8/8/8/4Q3/5K2 w - - 0 1")
 
     send("go")
     lines = read_output_until("bestmove")
-
-    ##send("position fen 7r/1k2q1p1/b1p5/5N2/Rn6/2P1PQ2/7P/5BK1 w - - 0 1")
-
-    ##send("go")
-    ##lines = read_output_until("bestmove")
 
     # Cleanup
     send("quit")
@@ -62,4 +62,4 @@ def run_engine_and_test(path_to_engine):
     return lines
 
 if __name__ == "__main__":
-    run_engine_and_test("./mcts_ip_engine")
+    run_engine_and_test("./minimax_engine")

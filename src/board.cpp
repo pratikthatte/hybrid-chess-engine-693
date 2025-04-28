@@ -72,25 +72,27 @@ void Board::parsePosition(char* command){
             moves++;
         }
     }
+    std::cout << "occupancy (parse Position) = " << std::hex << this->board_occupancy << "\n";
+    std::cout << "black pawns (parse Position) = "<<std::hex<<this->black_pawn<<"\n";
 }
 void Board::evaluateFen(char* fen) {
     std::cout << "Inside evaluate FEN" << std::endl;
     resetBoard();
     std::cout << "Exited reset board" << std::endl;
-
     int row = 0, col = 0, board_piece;
     int fen_section = 0;
 
     while (*fen && fen_section < 6) {
         char c = *fen;
     
-        if (fen_section == 0) { // piece placement
+        if (fen_section == 0) {
             if (c >= '1' && c <= '8') {
                 col += (c - '0');
             } else if (c == '/') {
                 row++;
                 col = 0;
-            } else if (c != ' ') {
+            }
+            else if (c != ' ') {
                 board_piece = charToPiece(c);
                 if (board_piece != -1) {
                     int square = row * 8 + col;
@@ -103,13 +105,13 @@ void Board::evaluateFen(char* fen) {
             fen++;
         }
     
-        else if (fen_section == 1) { // turn
+        else if (fen_section == 1) {
             if (c == 'w') this->turn = 1;
             else if (c == 'b') this->turn = -1;
             while (*fen && *fen != ' ') fen++;
         }
     
-        else if (fen_section == 2) { // castling
+        else if (fen_section == 2) {
             while (*fen && *fen != ' ') {
                 if (*fen == 'K') this->castling |= 1;
                 else if (*fen == 'Q') this->castling |= 1 << 1;
@@ -119,27 +121,32 @@ void Board::evaluateFen(char* fen) {
             }
         }
     
-        else if (fen_section == 3) { // en passant
+        else if (fen_section == 3) {
             if (c != '-') {
                 int epCol = tolower(c) - 'a';
                 fen++;
                 int epRow = *fen - '1';
                 this->enPassantSq = epRow * 8 + epCol;
+                // convert e.p. target like "e3" → file, rank
+                /*int ep_file = tolower(c) - 'a';
+                fen++;
+                int ep_rank = *fen - '1';
+                // internal row = 7-ep_rank
+                this->enPassantSq = (7 - ep_rank)*8 + ep_file;*/
             }
             while (*fen && *fen != ' ') fen++;
         }
     
-        else if (fen_section == 4) { // halfmove clock
+        else if (fen_section == 4) { 
             this->halfMoveCount = atoi(fen);
             while (*fen && *fen != ' ') fen++;
         }
     
-        else if (fen_section == 5) { // fullmove count
+        else if (fen_section == 5) { 
             this->fullMoveCount = atoi(fen);
             break;
         }
     
-        // move to next section after a space
         if (*fen == ' ') {
             fen_section++;
             fen++;
@@ -295,7 +302,7 @@ void Board::generateAttackMasks(){
     }
 }
 void Board::makeMove(char* moves){
-    Move temp_move;
+    Move temp_move{};
     populateMove(moves,&temp_move);
     implementMove(&temp_move);
 }
@@ -304,6 +311,12 @@ void Board::populateMove(char* moves, Move* move){
     int from_row = 8 - atoi(&moves[1]);
     int to_col = moves[2]-'a';
     int to_row = 8 - atoi(&moves[3]);
+    /*int file_from = moves[0] - 'a';
+    int rank_from = moves[1] - '1';
+    int file_to   = moves[2] - 'a';
+    int rank_to   = moves[3] - '1';*/
+    //move->fromSquare = (7 - rank_from)*8 + file_from;
+    //move->toSquare   = (7 - rank_to  )*8 + file_to;
     move->fromSquare = 8*from_row + from_col;
     move->toSquare = 8*to_row + to_col;
     move->castle = 0;
@@ -434,6 +447,12 @@ void Board::implementMove(Move* move){
     }
     if(move->pieceType==KING_W || move->pieceType==KING_B){
         this->castling &= this->turn==1 ? 0b1100 : 0b0011;
+        if(this->turn==1){
+            this->whiteKingSq = move->toSquare;
+        }
+        else{
+            this->blackKingSq = move->toSquare;
+        }
     }
     if(move->pieceType==ROOK_W || move->pieceType==ROOK_B){
         if(this->turn==1 && move->fromSquare==56)   this->castling &= 0b1101;
@@ -441,7 +460,10 @@ void Board::implementMove(Move* move){
         if(this->turn==-1 && move->fromSquare==0)   this->castling &= 0b0111;
         if(this->turn==-1 && move->fromSquare==7)   this->castling &= 0b1011;
     }
-    *pieceMoved ^= 1LL << move->fromSquare;
+    *pieceMoved &= ~(1ULL << move->fromSquare);
+    *pieceMoved |= 1LL << move->toSquare;
+    this->generateOccupancyMask();
+    this->generateAttackMasks();
     if(move->promotion==QUEEN_B){
         BitBoard* target = &this->black_queen;
         *target |= 1LL << move->toSquare;
@@ -483,13 +505,6 @@ void Board::implementMove(Move* move){
         this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[BISHOP_W]][move->toSquare];
     }
     else{
-        *pieceMoved |= 1LL << move->toSquare;
-        if(*pieceMoved==this->white_king){
-            this->whiteKingSq = move->toSquare;
-        }
-        else if(*pieceMoved==this->black_king){
-            this->blackKingSq = move->toSquare;
-        }
         this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[move->pieceType]][move->toSquare];
     }
     BitBoard opponentRook = this->turn==1 ? this->black_rook : this->white_rook;
@@ -497,41 +512,42 @@ void Board::implementMove(Move* move){
     if(*temp_bb & this->board_squares[move->toSquare]){
         this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? PAWN_B : PAWN_W]][move->toSquare];
         compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
-        *temp_bb ^= 1LL << move->toSquare;
+        *temp_bb &= ~(1ULL << move->toSquare);
     }
     temp_bb = this->turn==1 ? &this->black_knight : &this->white_knight;
     if(*temp_bb & this->board_squares[move->toSquare]){
         this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? KNIGHT_B : KNIGHT_W]][move->toSquare];
         compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
-        *temp_bb ^= 1LL << move->toSquare;
+        *temp_bb &= ~(1ULL << move->toSquare);
     }
     temp_bb = this->turn==1 ? &this->black_bishop : &this->white_bishop;
     if(*temp_bb & this->board_squares[move->toSquare]){
         this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? BISHOP_B : BISHOP_W]][move->toSquare];
         compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
-        *temp_bb ^= 1LL << move->toSquare;
+        *temp_bb &= ~(1ULL << move->toSquare);
     }
     temp_bb = this->turn==1 ? &this->black_rook : &this->white_rook;
     if(*temp_bb & this->board_squares[move->toSquare]){
         this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? ROOK_B : ROOK_W]][move->toSquare];
         compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
-        *temp_bb ^= 1LL << move->toSquare;
+        *temp_bb &= ~(1ULL << move->toSquare);
     }
     temp_bb = this->turn==1 ? &this->black_queen : &this->white_queen;
     if(*temp_bb & this->board_squares[move->toSquare]){
         this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? QUEEN_B : QUEEN_W]][move->toSquare];
         compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
-        *temp_bb ^= 1LL << move->toSquare;
+        *temp_bb &= ~(1ULL << move->toSquare);
     }
     temp_bb = this->turn==1 ? &this->black_king : &this->white_king;
     if(*temp_bb & this->board_squares[move->toSquare]){
         this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? KING_B : KING_W]][move->toSquare];
         compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
-        *temp_bb ^= 1LL << move->toSquare;
+        *temp_bb &= ~(1ULL << move->toSquare);
     }
     this->board_hash ^= this->zobrist_castling[this->castling];
     this->turn = -1*this->turn;
     this->generateOccupancyMask();
+    this->generateAttackMasks();
 }
 void Board::makeEnPassantMove(Move* move){
     int capturedSquare = this->enPassantSq + (this->turn==1 ?  8 : -8);
@@ -541,12 +557,13 @@ void Board::makeEnPassantMove(Move* move){
     this->board_hash ^= this->zobrist_pieces_hash[this->turn==1 ? 1 : 0][capturedSquare];
     BitBoard* playerPawns = this->turn==1 ? &white_pawn : &black_pawn;
     BitBoard* opponentPawns = this->turn==1 ? &black_pawn : &white_pawn;
-    *opponentPawns^=1LL<<capturedSquare;
-    *playerPawns ^= 1LL<<move->fromSquare;
+    *opponentPawns &= ~(1ULL << capturedSquare);
+    *playerPawns &= ~(1ULL << move->fromSquare);
     *playerPawns |= 1LL<<move->toSquare;
     this->enPassantSq = -1;
     this->turn = -1*this->turn;
     this->generateOccupancyMask();
+    this->generateAttackMasks();
 }
 void Board::makeCastleMove(Move* move){
     if(move->castle==1){
@@ -601,7 +618,8 @@ void Board::makeCastleMove(Move* move){
     this->board_hash ^= this->zobrist_castling[this->castling];
     this->castling &= this->turn==1 ? 0b1100 : 0b0011;
     this->board_hash ^= this->zobrist_castling[this->castling];
-    generateOccupancyMask();
+    this->generateOccupancyMask();
+    this->generateAttackMasks();
     this->enPassantSq = -1;
     this->turn = -1* this->turn;
 }
@@ -734,6 +752,7 @@ std::string Board::getFEN() {
     std::string fen;
 
     for (int rank = 0; rank < 8; ++rank) {
+    //for (int rank = 7; rank >= 0; --rank) {
         int empty = 0;
         for (int file = 0; file < 8; ++file) {
             int square = rank * 8 + file;
@@ -759,6 +778,7 @@ std::string Board::getFEN() {
         }
         if (empty > 0) fen += std::to_string(empty);
         if (rank < 7) fen += '/';
+        //if (rank > 0) fen += '/';
     }
 
     fen += (turn == 1 ? " w " : " b ");
@@ -799,5 +819,94 @@ char Board::pieceToChar(int piece) {
         default: return '.';
     }
 }
-
-
+bool Board::isSquareAttacked(int sq, bool byWhite) {
+    BitBoard attacks = 0ULL;
+    if (byWhite) {
+        BitBoard tmp = white_pawn;
+        while(tmp) {
+          int s = __builtin_ctzll(tmp);
+          attacks |= moveEngine.get_pawn_attacks(s,true);
+          tmp &= tmp-1;
+        }
+        tmp = white_knight;
+        while(tmp) {
+          int s = __builtin_ctzll(tmp);
+          attacks |= moveEngine.get_knight_attacks(s);
+          tmp &= tmp-1;
+        }
+        tmp = white_bishop;
+        while(tmp) {
+          int s = __builtin_ctzll(tmp);
+          attacks |= moveEngine.get_bishop_attacks(s, board_occupancy);
+          tmp &= tmp-1;
+        }
+        tmp = white_rook;
+        while(tmp) {
+          int s = __builtin_ctzll(tmp);
+          attacks |= moveEngine.get_rook_attacks(s, board_occupancy);
+          tmp &= tmp-1;
+        }
+        tmp = white_queen;
+        while(tmp) {
+          int s = __builtin_ctzll(tmp);
+          attacks |= moveEngine.get_queen_attacks(s, board_occupancy);
+          tmp &= tmp-1;
+        }
+        tmp = white_king;
+        while(tmp) {
+          int s = __builtin_ctzll(tmp);
+          attacks |= moveEngine.get_king_attacks(s);
+          tmp &= tmp-1;
+        }
+    } else {
+        BitBoard tmp = black_pawn;
+        while(tmp) {
+          int s = __builtin_ctzll(tmp);
+          attacks |= moveEngine.get_pawn_attacks(s,false);
+          tmp &= tmp-1;
+        }
+        tmp = black_knight;
+        while(tmp) {
+          int s = __builtin_ctzll(tmp);
+          attacks |= moveEngine.get_knight_attacks(s);
+          tmp &= tmp-1;
+        }
+        tmp = black_bishop;
+        while(tmp) {
+          int s = __builtin_ctzll(tmp);
+          attacks |= moveEngine.get_bishop_attacks(s, board_occupancy);
+          tmp &= tmp-1;
+        }
+        tmp = black_rook;
+        while(tmp) {
+          int s = __builtin_ctzll(tmp);
+          attacks |= moveEngine.get_rook_attacks(s, board_occupancy);
+          tmp &= tmp-1;
+        }
+        tmp = black_queen;
+        while(tmp) {
+          int s = __builtin_ctzll(tmp);
+          attacks |= moveEngine.get_queen_attacks(s, board_occupancy);
+          tmp &= tmp-1;
+        }
+        tmp = black_king;
+        while(tmp) {
+          int s = __builtin_ctzll(tmp);
+          attacks |= moveEngine.get_king_attacks(s);
+          tmp &= tmp-1;
+        }
+    }
+    return (attacks & (1ULL<<sq)) != 0;
+}
+bool Board::isKingInCheck(int color) const {
+    int kingSq = (color == +1 ? whiteKingSq : blackKingSq);
+    int attackerTurn = -color;
+    BitBoard oldTurn = this->turn;
+    Board const* self = this;         
+    Board tmp = *this;                  
+    tmp.turn = attackerTurn;             
+    tmp.generateOccupancyMask();      
+    tmp.generateAttackMasks();
+    bool attacked = (tmp.board_attack_mask & (1ULL << kingSq)) != 0;
+    return attacked;
+}
