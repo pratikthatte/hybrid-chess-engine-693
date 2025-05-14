@@ -1,4 +1,4 @@
-# Chess Engine Project
+# CSCI 693 Capstone Project
 
 ## Overview
 
