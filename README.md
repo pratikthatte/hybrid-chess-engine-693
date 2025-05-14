@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains a C++17-based chess engine framework featuring multiple search algorithms and optimized data structures for fast move generation and evaluation. You can compile five distinct engine variants and pit them against each other in Arena.
+This repository contains a C++-based chess engine framework featuring multiple search algorithms and optimized data structures for fast move generation and evaluation. You can compile five distinct engine variants and pit them against each other in Arena.
 
 ## Key Features
 
@@ -15,8 +15,7 @@ This repository contains a C++17-based chess engine framework featuring multiple
 
 ## Prerequisites
 
-* C++17 compiler (e.g., g++ 9.0+)
-* GNU Make (optional)
+* C++ compiler
 * [Arena GUI](http://www.playwitharena.de/) installed on Windows or Wine on Linux/macOS
 
 ## Compilation Commands
@@ -61,14 +60,13 @@ Adjust `movetime` (in ms) or other UCI options as needed.
 
    * **Executable**: Browse to the compiled binary (e.g., `minimax-engine`).
    * **Protocol**: Select **UCI**.
-   * **Name**: Assign a descriptive name (e.g., "Minimax (O2)").
+   * **Name**: Assign a descriptive name (e.g., "Minimax Engine").
 3. After adding all five engines, go to **Engines > Tournament...**.
 4. In the **Tournament** dialog:
 
    * **Participants**: Add your five engines.
    * **Time control**: Set to **1 min/move** (or customize).
-   * **Number of games**: **100** (per pairing).
-   * **Starting positions**: Use **Default** or **Load PGN** for specific test suites.
+   * **Number of games**: **10** (per pairing).
    * **Pairing system**: **Round Robin** recommended.
 5. Click **Start** to run the tournament. Monitor live results and statistics.
 6. To **export** results, go to **File > Save > Save as CSV** or **Export PGN**.
