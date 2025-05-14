@@ -99,16 +99,16 @@ int main(){
                     }
                 }
             }
-            #ifdef USE_MCTS_IP
-               //searchEngine->populateBestMoveMCTS_IP_M(board.get());
+            #ifdef USE_MCTS
+               searchEngine->populateBestMoveMCTSSearch(board.get());
             #elif defined(USE_MINIMAX)
                 searchEngine->populateBestMoveMinimaxSearch(board.get());
-            #elif defined(USE_MCTS)
-                //searchEngine->populateBestMoveMCTSSearch(board.get());
+            #elif defined(USE_MCTS_IP)
+                searchEngine->populateBestMoveMCTS_IP_M(board.get());
             #elif defined(USE_MCTS_IR)
-                //searchEngine->populateBestMoveMCTS_IR_M(board.get());
+                searchEngine->populateBestMoveMCTS_IR_M(board.get());
             #elif defined(USE_MCTS_IC)
-                //searchEngine->populateBestMoveMCTS_IC_M(board.get());
+                searchEngine->populateBestMoveMCTS_IC_M(board.get());
             #endif
             skip_search: ;
         }

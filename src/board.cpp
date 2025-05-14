@@ -383,176 +383,176 @@ void Board::populateMove(char* moves, Move* move){
 }
 void Board::implementMove(Move* move){
     bool enPassant = move->toSquare == this->enPassantSq && (move->pieceType==PAWN_W || move->pieceType==PAWN_B);
+    board_hash ^= zobrist_pieces_hash[piece_value_map[move->pieceType]][move->fromSquare];
+    board_hash ^= zobrist_white_to_move;
+    board_hash ^= zobrist_castling[castling];
     if(enPassant){
         this->makeEnPassantMove(move);
-        return;
     }
-    if(move->castle){
+    else if(move->castle){
         this->makeCastleMove(move);
-        return;
-    }
-    this->board_hash = this->zobrist_pieces_hash[piece_value_map[move->pieceType]][move->fromSquare];
-    this->board_hash ^= this->zobrist_white_to_move;
-    this->board_hash ^= this->zobrist_castling[this->castling];
-    if(this->enPassantSq!=-1){
-        this->board_hash ^= this->zobrist_en_passant[this->enPassantSq];
-    }
-    this->enPassantSq = -1;
-    bool starterPawn = (this->turn==1 && (move->pieceType==PAWN_W) && (move->fromSquare>=40 && move->fromSquare<=55)) || (this->turn == -1 && (move->pieceType==PAWN_B) && (move->fromSquare>=8 && move->fromSquare<=23));
-    if(starterPawn){
-        int distance = std::abs(move->fromSquare - move->toSquare);
-        if(distance==16){
-            this->enPassantSq = this->turn==1 ? move->fromSquare - 8 : move->fromSquare + 8;
-        }
-    } 
-    if(this->enPassantSq != -1){
-        this->board_hash ^= this->zobrist_en_passant[this->enPassantSq];
-    }
-    BitBoard* pieceMoved = nullptr;
-    if(move->pieceType==PAWN_B){
-        pieceMoved = &this->black_pawn;
-    }
-    else if(move->pieceType==PAWN_W){
-        pieceMoved = &this->white_pawn;
-    }
-    else if(move->pieceType==KNIGHT_B){
-        pieceMoved = &this->black_knight;
-    }
-    else if(move->pieceType==KNIGHT_W){
-        pieceMoved = &this->white_knight;
-    }
-    else if(move->pieceType==ROOK_B){
-        pieceMoved = &this->black_rook;
-    }
-    else if(move->pieceType==ROOK_W){
-        pieceMoved = &this->white_rook;
-    }
-    else if(move->pieceType==BISHOP_B){
-        pieceMoved = &this->black_bishop;
-    }
-    else if(move->pieceType==BISHOP_W){
-        pieceMoved = &this->white_bishop;
-    }
-    else if(move->pieceType==QUEEN_B){
-        pieceMoved = &this->black_queen;
-    }
-    else if(move->pieceType==QUEEN_W){
-        pieceMoved = &this->white_queen;
-    }
-    else if(move->pieceType==KING_B){
-        pieceMoved = &this->black_king;
-    }
-    else if(move->pieceType==KING_W){
-        pieceMoved = &this->white_king;
-    }
-    if(move->pieceType==KING_W || move->pieceType==KING_B){
-        this->castling &= this->turn==1 ? 0b1100 : 0b0011;
-        if(this->turn==1){
-            this->whiteKingSq = move->toSquare;
-        }
-        else{
-            this->blackKingSq = move->toSquare;
-        }
-    }
-    if(move->pieceType==ROOK_W || move->pieceType==ROOK_B){
-        if(this->turn==1 && move->fromSquare==56)   this->castling &= 0b1101;
-        if(this->turn==1 && move->fromSquare==63)   this->castling &= 0b1110;
-        if(this->turn==-1 && move->fromSquare==0)   this->castling &= 0b0111;
-        if(this->turn==-1 && move->fromSquare==7)   this->castling &= 0b1011;
-    }
-    *pieceMoved &= ~(1ULL << move->fromSquare);
-    *pieceMoved |= 1LL << move->toSquare;
-    this->generateOccupancyMask();
-    this->generateAttackMasks();
-    if(move->promotion==QUEEN_B){
-        BitBoard* target = &this->black_queen;
-        *target |= 1LL << move->toSquare;
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[QUEEN_B]][move->toSquare];
-    }
-    else if(move->promotion==QUEEN_W){
-        BitBoard* target = &this->white_queen;
-        *target |= 1LL << move->toSquare;
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[QUEEN_W]][move->toSquare];
-    }
-    else if(move->promotion==ROOK_B){
-        BitBoard* target = &this->black_rook;
-        *target |= 1LL << move->toSquare;
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[ROOK_B]][move->toSquare];
-    }
-    else if(move->promotion==ROOK_W){
-        BitBoard* target = &this->white_rook;
-        *target |= 1LL << move->toSquare;
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[ROOK_W]][move->toSquare];
-    }
-    else if(move->promotion==KNIGHT_B){
-        BitBoard* target = &this->black_knight;
-        *target |= 1LL << move->toSquare;
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[KNIGHT_B]][move->toSquare];
-    }
-    else if(move->promotion==KNIGHT_W){
-        BitBoard* target = &this->white_knight;
-        *target |= 1LL << move->toSquare;
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[KNIGHT_W]][move->toSquare];
-    }
-    else if(move->promotion==BISHOP_B){
-        BitBoard* target = &this->black_bishop;
-        *target |= 1LL << move->toSquare;
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[BISHOP_B]][move->toSquare];
-    }
-    else if(move->promotion==BISHOP_W){
-        BitBoard* target = &this->white_bishop;
-        *target |= 1LL << move->toSquare;
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[BISHOP_W]][move->toSquare];
     }
     else{
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[move->pieceType]][move->toSquare];
-    }
-    BitBoard opponentRook = this->turn==1 ? this->black_rook : this->white_rook;
-    BitBoard* temp_bb = this->turn==1 ? &this->black_pawn : &this->white_pawn;
-    if(*temp_bb & this->board_squares[move->toSquare]){
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? PAWN_B : PAWN_W]][move->toSquare];
-        compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
-        *temp_bb &= ~(1ULL << move->toSquare);
-    }
-    temp_bb = this->turn==1 ? &this->black_knight : &this->white_knight;
-    if(*temp_bb & this->board_squares[move->toSquare]){
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? KNIGHT_B : KNIGHT_W]][move->toSquare];
-        compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
-        *temp_bb &= ~(1ULL << move->toSquare);
-    }
-    temp_bb = this->turn==1 ? &this->black_bishop : &this->white_bishop;
-    if(*temp_bb & this->board_squares[move->toSquare]){
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? BISHOP_B : BISHOP_W]][move->toSquare];
-        compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
-        *temp_bb &= ~(1ULL << move->toSquare);
-    }
-    temp_bb = this->turn==1 ? &this->black_rook : &this->white_rook;
-    if(*temp_bb & this->board_squares[move->toSquare]){
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? ROOK_B : ROOK_W]][move->toSquare];
-        compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
-        *temp_bb &= ~(1ULL << move->toSquare);
-    }
-    temp_bb = this->turn==1 ? &this->black_queen : &this->white_queen;
-    if(*temp_bb & this->board_squares[move->toSquare]){
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? QUEEN_B : QUEEN_W]][move->toSquare];
-        compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
-        *temp_bb &= ~(1ULL << move->toSquare);
-    }
-    temp_bb = this->turn==1 ? &this->black_king : &this->white_king;
-    if(*temp_bb & this->board_squares[move->toSquare]){
-        this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? KING_B : KING_W]][move->toSquare];
-        compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
-        *temp_bb &= ~(1ULL << move->toSquare);
+        if(this->enPassantSq!=-1){
+            this->board_hash ^= this->zobrist_en_passant[this->enPassantSq];
+        }
+        this->enPassantSq = -1;
+        bool starterPawn = (this->turn==1 && (move->pieceType==PAWN_W) && (move->fromSquare>=40 && move->fromSquare<=55)) || (this->turn == -1 && (move->pieceType==PAWN_B) && (move->fromSquare>=8 && move->fromSquare<=23));
+        if(starterPawn){
+            int distance = std::abs(move->fromSquare - move->toSquare);
+            if(distance==16){
+                this->enPassantSq = this->turn==1 ? move->fromSquare - 8 : move->fromSquare + 8;
+            }
+        } 
+        if(this->enPassantSq != -1){
+            this->board_hash ^= this->zobrist_en_passant[this->enPassantSq];
+        }
+        BitBoard* pieceMoved = nullptr;
+        if(move->pieceType==PAWN_B){
+            pieceMoved = &this->black_pawn;
+        }
+        else if(move->pieceType==PAWN_W){
+            pieceMoved = &this->white_pawn;
+        }
+        else if(move->pieceType==KNIGHT_B){
+            pieceMoved = &this->black_knight;
+        }
+        else if(move->pieceType==KNIGHT_W){
+            pieceMoved = &this->white_knight;
+        }
+        else if(move->pieceType==ROOK_B){
+            pieceMoved = &this->black_rook;
+        }
+        else if(move->pieceType==ROOK_W){
+            pieceMoved = &this->white_rook;
+        }
+        else if(move->pieceType==BISHOP_B){
+            pieceMoved = &this->black_bishop;
+        }
+        else if(move->pieceType==BISHOP_W){
+            pieceMoved = &this->white_bishop;
+        }
+        else if(move->pieceType==QUEEN_B){
+            pieceMoved = &this->black_queen;
+        }
+        else if(move->pieceType==QUEEN_W){
+            pieceMoved = &this->white_queen;
+        }
+        else if(move->pieceType==KING_B){
+            pieceMoved = &this->black_king;
+        }
+        else if(move->pieceType==KING_W){
+            pieceMoved = &this->white_king;
+        }
+        if(move->pieceType==KING_W || move->pieceType==KING_B){
+            this->castling &= this->turn==1 ? 0b1100 : 0b0011;
+            if(this->turn==1){
+                this->whiteKingSq = move->toSquare;
+            }
+            else{
+                this->blackKingSq = move->toSquare;
+            }
+        }
+        if(move->pieceType==ROOK_W || move->pieceType==ROOK_B){
+            if(this->turn==1 && move->fromSquare==56)   this->castling &= 0b1101;
+            if(this->turn==1 && move->fromSquare==63)   this->castling &= 0b1110;
+            if(this->turn==-1 && move->fromSquare==0)   this->castling &= 0b0111;
+            if(this->turn==-1 && move->fromSquare==7)   this->castling &= 0b1011;
+        }
+        *pieceMoved &= ~(1ULL << move->fromSquare);
+        *pieceMoved |= 1LL << move->toSquare;
+        this->generateOccupancyMask();
+        this->generateAttackMasks();
+        if(move->promotion==QUEEN_B){
+            BitBoard* target = &this->black_queen;
+            *target |= 1LL << move->toSquare;
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[QUEEN_B]][move->toSquare];
+        }
+        else if(move->promotion==QUEEN_W){
+            BitBoard* target = &this->white_queen;
+            *target |= 1LL << move->toSquare;
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[QUEEN_W]][move->toSquare];
+        }
+        else if(move->promotion==ROOK_B){
+            BitBoard* target = &this->black_rook;
+            *target |= 1LL << move->toSquare;
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[ROOK_B]][move->toSquare];
+        }
+        else if(move->promotion==ROOK_W){
+            BitBoard* target = &this->white_rook;
+            *target |= 1LL << move->toSquare;
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[ROOK_W]][move->toSquare];
+        }
+        else if(move->promotion==KNIGHT_B){
+            BitBoard* target = &this->black_knight;
+            *target |= 1LL << move->toSquare;
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[KNIGHT_B]][move->toSquare];
+        }
+        else if(move->promotion==KNIGHT_W){
+            BitBoard* target = &this->white_knight;
+            *target |= 1LL << move->toSquare;
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[KNIGHT_W]][move->toSquare];
+        }
+        else if(move->promotion==BISHOP_B){
+            BitBoard* target = &this->black_bishop;
+            *target |= 1LL << move->toSquare;
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[BISHOP_B]][move->toSquare];
+        }
+        else if(move->promotion==BISHOP_W){
+            BitBoard* target = &this->white_bishop;
+            *target |= 1LL << move->toSquare;
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[BISHOP_W]][move->toSquare];
+        }
+        else{
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[move->pieceType]][move->toSquare];
+        }
+        BitBoard opponentRook = this->turn==1 ? this->black_rook : this->white_rook;
+        BitBoard* temp_bb = this->turn==1 ? &this->black_pawn : &this->white_pawn;
+        if(*temp_bb & this->board_squares[move->toSquare]){
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? PAWN_B : PAWN_W]][move->toSquare];
+            compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
+            *temp_bb &= ~(1ULL << move->toSquare);
+        }
+        temp_bb = this->turn==1 ? &this->black_knight : &this->white_knight;
+        if(*temp_bb & this->board_squares[move->toSquare]){
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? KNIGHT_B : KNIGHT_W]][move->toSquare];
+            compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
+            *temp_bb &= ~(1ULL << move->toSquare);
+        }
+        temp_bb = this->turn==1 ? &this->black_bishop : &this->white_bishop;
+        if(*temp_bb & this->board_squares[move->toSquare]){
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? BISHOP_B : BISHOP_W]][move->toSquare];
+            compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
+            *temp_bb &= ~(1ULL << move->toSquare);
+        }
+        temp_bb = this->turn==1 ? &this->black_rook : &this->white_rook;
+        if(*temp_bb & this->board_squares[move->toSquare]){
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? ROOK_B : ROOK_W]][move->toSquare];
+            compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
+            *temp_bb &= ~(1ULL << move->toSquare);
+        }
+        temp_bb = this->turn==1 ? &this->black_queen : &this->white_queen;
+        if(*temp_bb & this->board_squares[move->toSquare]){
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? QUEEN_B : QUEEN_W]][move->toSquare];
+            compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
+            *temp_bb &= ~(1ULL << move->toSquare);
+        }
+        temp_bb = this->turn==1 ? &this->black_king : &this->white_king;
+        if(*temp_bb & this->board_squares[move->toSquare]){
+            this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[this->turn==1 ? KING_B : KING_W]][move->toSquare];
+            compareTempBBWithRookAndCastleChanges(*temp_bb,opponentRook,move);
+            *temp_bb &= ~(1ULL << move->toSquare);
+        }
     }
     this->board_hash ^= this->zobrist_castling[this->castling];
     this->turn = -1*this->turn;
+    this->board_hash ^= this->zobrist_white_to_move;
     this->generateOccupancyMask();
     this->generateAttackMasks();
 }
 void Board::makeEnPassantMove(Move* move){
     int capturedSquare = this->enPassantSq + (this->turn==1 ?  8 : -8);
     this->board_hash ^= this->zobrist_en_passant[this->enPassantSq];
-    this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[move->pieceType]][move->fromSquare];
     this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[move->pieceType]][move->toSquare];
     this->board_hash ^= this->zobrist_pieces_hash[this->turn==1 ? 1 : 0][capturedSquare];
     BitBoard* playerPawns = this->turn==1 ? &white_pawn : &black_pawn;
@@ -560,10 +560,6 @@ void Board::makeEnPassantMove(Move* move){
     *opponentPawns &= ~(1ULL << capturedSquare);
     *playerPawns &= ~(1ULL << move->fromSquare);
     *playerPawns |= 1LL<<move->toSquare;
-    this->enPassantSq = -1;
-    this->turn = -1*this->turn;
-    this->generateOccupancyMask();
-    this->generateAttackMasks();
 }
 void Board::makeCastleMove(Move* move){
     if(move->castle==1){
@@ -611,17 +607,8 @@ void Board::makeCastleMove(Move* move){
         this->black_rook |= 1LL << 3;
         this->blackKingSq = 2;
     }
-    if(this->enPassantSq!=-1){
-        this->board_hash ^= this->zobrist_en_passant[this->enPassantSq];
-    }
-    this->board_hash ^= this->zobrist_white_to_move;
-    this->board_hash ^= this->zobrist_castling[this->castling];
+    this->board_hash ^= this->zobrist_pieces_hash[piece_value_map[move->pieceType]][move->toSquare];
     this->castling &= this->turn==1 ? 0b1100 : 0b0011;
-    this->board_hash ^= this->zobrist_castling[this->castling];
-    this->generateOccupancyMask();
-    this->generateAttackMasks();
-    this->enPassantSq = -1;
-    this->turn = -1* this->turn;
 }
 void Board::compareTempBBWithRookAndCastleChanges(BitBoard bb, BitBoard rook, Move* move){
     if(bb==rook){

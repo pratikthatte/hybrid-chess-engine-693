@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iostream>
 #include <functional>
+#include <cmath>
 
 int SearchEngine::pieceValue(Pieces p) {
     switch (p) {
@@ -17,7 +18,7 @@ int SearchEngine::pieceValue(Pieces p) {
 }
 
 SearchEngine::SearchEngine(EvaluationEngine& engine)
-  : evalEngine(engine), timeLimitMs(1000), searchDepth(4)
+  : evalEngine(engine), timeLimitMs(1000), searchDepth(4), mctsRng(std::random_device{}()), explorationConstant(sqrt(2.0))
 {
     for(int i=0;i<MAX_PLY;i++) {
       killers[i][0] = killers[i][1] = Move{};
@@ -174,13 +175,11 @@ std::vector<Move> SearchEngine::generateLegalMoves(Board& board) {
 std::vector<Move> SearchEngine::filterLegalMoves(Board& board,
                                                  const std::vector<Move>& moves) {
   std::vector<Move> legal;
-  // remember who was to move
-  int movingColor = board.turn;  // +1 = White, -1 = Black
+  int movingColor = board.turn;
 
   for (auto m : moves) {
       Board copy = board;
       copy.implementMove(&m);
-      // if after the move YOUR king is not in check, it’s legal
       if (!copy.isKingInCheck(movingColor))
           legal.push_back(m);
   }
@@ -385,15 +384,6 @@ std::string SearchEngine::moveToUCI(const Move& m) {
     s.push_back('1' + (7 - m.fromSquare / 8));
     s.push_back('a' + (m.toSquare   % 8));
     s.push_back('1' + (7 - m.toSquare   / 8));
-    // fromSquare → file/rank in exactly the inverse of populateMove:
-  /*int file_from =  m.fromSquare % 8;
-  int rank_from = 7 - (m.fromSquare / 8);
-  int file_to   =  m.toSquare   % 8;
-  int rank_to   = 7 - (m.toSquare   / 8);
-  s.push_back(char('a' + file_from));
-  s.push_back(char('1' + rank_from));
-  s.push_back(char('a' + file_to));
-  s.push_back(char('1' + rank_to));*/
     if ((m.pieceType == PAWN_W || m.pieceType == PAWN_B)
         && m.promotion  != m.pieceType) {
     char promoChar = 'q';
@@ -408,3 +398,317 @@ std::string SearchEngine::moveToUCI(const Move& m) {
     }
     return s;
 }
+SearchEngine::MCTSNode* SearchEngine::selectNode(MCTSNode* node) {
+  MCTSNode* best = nullptr;
+  double bestUCT = -std::numeric_limits<double>::infinity();
+  for (auto c : node->children) {
+      double winRate = c->wins / c->visits;
+      double uct = winRate + explorationConstant *
+          sqrt(log(node->visits) / c->visits);
+      if (uct > bestUCT) {
+          bestUCT = uct;
+          best = c;
+      }
+  }
+  node->visits++;
+  return best;
+}
+SearchEngine::MCTSNode* SearchEngine::expandNode(MCTSNode* node, Board& state) {
+  Move m = node->untriedMoves.back();
+  node->untriedMoves.pop_back();
+  state.implementMove(&m);
+
+  MCTSNode* child = new MCTSNode(node, m, state.turn);
+  std::vector<Move> moves = generateLegalMoves(state);
+  child->untriedMoves = filterLegalMoves(state, moves);
+  node->children.push_back(child);
+  return child;
+}
+double SearchEngine::simulatePlayout(Board state, int maxPlies, int rootPlayer) {
+  int plies = 0;
+  while (plies < maxPlies) {
+      std::vector<Move> moves = generateLegalMoves(state);
+      moves = filterLegalMoves(state, moves);
+      if (moves.empty()) break;
+      std::uniform_int_distribution<int> dist(0, (int)moves.size() - 1);
+      Move m = moves[dist(mctsRng)];
+      state.implementMove(&m);
+      ++plies;
+  }
+  std::vector<Move> movesEnd = generateLegalMoves(state);
+  movesEnd = filterLegalMoves(state, movesEnd);
+  double result;
+  if (!movesEnd.empty()) {
+      result = 0.5;
+  } else {
+      bool inCheck = state.isKingInCheck(state.turn);
+      if (inCheck) {
+          result = (state.turn != rootPlayer) ? 1.0 : 0.0;
+      } else {
+          result = 0.5;
+      }
+  }
+  return result;
+}
+void SearchEngine::backpropagate(MCTSNode* node, double result) {
+  while (node) {
+      node->wins   += result;
+      node->visits++;
+      node = node->parent;
+  }
+}
+void SearchEngine::populateBestMoveMCTSSearch(Board* board) {
+  int rootPlayer = board->turn;
+  std::vector<Move> rootMoves = generateLegalMoves(*board);
+  rootMoves = filterLegalMoves(*board, rootMoves);
+  if (rootMoves.empty()) {
+      std::cout << "bestmove 0000\n";
+      return;
+  }
+  MCTSNode* root = new MCTSNode(nullptr, Move{}, rootPlayer);
+  root->untriedMoves = rootMoves;
+  auto startTime = std::chrono::steady_clock::now();
+  const int maxPlies = 40;
+  while (true) {
+      auto now = std::chrono::steady_clock::now();
+      if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count() >= timeLimitMs)
+          break;
+      Board state = *board;
+      MCTSNode* node = root;
+      while (node->untriedMoves.empty() && !node->children.empty()) {
+          node = selectNode(node);
+          state.implementMove(&node->move);
+      }
+      if (!node->untriedMoves.empty()) {
+          node = expandNode(node, state);
+      }
+      double result = simulatePlayout(state, maxPlies, rootPlayer);
+      backpropagate(node, result);
+  }
+  MCTSNode* bestChild = nullptr;
+  int bestVisits = -1;
+  for (auto c : root->children) {
+      if (c->visits > bestVisits) {
+          bestVisits = c->visits;
+          bestChild = c;
+      }
+  }
+  Move bestMove = bestChild ? bestChild->move : rootMoves[0];
+  std::cout << "bestmove " << moveToUCI(bestMove) << std::endl;
+  std::function<void(MCTSNode*)> deleteSubtree = [&](MCTSNode* n) {
+      for (auto c : n->children) deleteSubtree(c);
+      delete n;
+  };
+  deleteSubtree(root);
+}
+void SearchEngine::populateBestMoveMCTS_IR_M(Board* board) {
+  int d           = searchDepth;
+  int rootPlayer  = board->turn;
+  auto rootMoves  = generateLegalMoves(*board);
+  rootMoves       = filterLegalMoves(*board, rootMoves);
+  if (rootMoves.empty()) {
+      std::cout << "bestmove 0000\n";
+      return;
+  }
+  MCTSNode* root = new MCTSNode(nullptr, Move{}, rootPlayer);
+  root->untriedMoves = rootMoves;
+  auto startTime = std::chrono::steady_clock::now();
+  const int  maxPlies = 40;
+  const double ε      = 0.1;
+  std::uniform_real_distribution<double> uni(0.0, 1.0);
+  while (true) {
+      auto now = std::chrono::steady_clock::now();
+      if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count()
+          >= timeLimitMs)
+          break;
+      Board state = *board;
+      MCTSNode* node = root;
+      while (node->untriedMoves.empty() && !node->children.empty()) {
+          node = selectNode(node);
+          state.implementMove(&node->move);
+      }
+      if (!node->untriedMoves.empty()) {
+          node = expandNode(node, state);
+      }
+      int plies = 0;
+      while (plies < maxPlies) {
+          auto t2 = std::chrono::steady_clock::now();
+          if (std::chrono::duration_cast<std::chrono::milliseconds>(t2 - startTime).count()
+              >= timeLimitMs)
+              break;
+
+          auto moves = generateLegalMoves(state);
+          moves = filterLegalMoves(state, moves);
+          if (moves.empty()) break;
+
+          Move choice;
+          if (uni(mctsRng) < ε) {
+              std::uniform_int_distribution<int> dist(0, moves.size()-1);
+              choice = moves[dist(mctsRng)];
+          } else {
+              double bestVal = -1.0;
+              for (auto& m : moves) {
+                  Board tmp = state;
+                  tmp.implementMove(&m);
+                  double v = static_cast<double>(
+                    evalEngine.evaluate_position_with_king_safety_and_development(tmp)
+                );
+                  if (v > bestVal) {
+                      bestVal = v;
+                      choice  = m;
+                  }
+              }
+          }
+          state.implementMove(&choice);
+          ++plies;
+      }
+      double result;
+      auto endMoves = generateLegalMoves(state);
+      endMoves = filterLegalMoves(state, endMoves);
+      if (!endMoves.empty()) {
+          result = 0.5;
+      } else {
+          bool inCheck = state.isKingInCheck(state.turn);
+          result = (state.turn != rootPlayer) ? 1.0 : 0.0;
+      }
+      backpropagate(node, result);
+  }
+  MCTSNode* bestChild = nullptr;
+  int bestVisits = -1;
+  for (auto c : root->children) {
+      if (c->visits > bestVisits) {
+          bestVisits  = c->visits;
+          bestChild   = c;
+      }
+  }
+  Move bestMove = bestChild ? bestChild->move : rootMoves[0];
+  std::cout << "bestmove " << moveToUCI(bestMove) << std::endl;
+  std::function<void(MCTSNode*)> deleter = [&](MCTSNode* n) {
+      for (auto c : n->children) deleter(c);
+      delete n;
+  };
+  deleter(root);
+}
+
+void SearchEngine::populateBestMoveMCTS_IC_M(Board* board) {
+  int d = searchDepth;
+  int rootPlayer = board->turn;
+  int cutoffPlies = d;
+
+  auto rootMoves = generateLegalMoves(*board);
+  rootMoves = filterLegalMoves(*board, rootMoves);
+  if (rootMoves.empty()) { std::cout << "bestmove 0000\n"; return; }
+
+  MCTSNode* root = new MCTSNode(nullptr, Move{}, rootPlayer);
+  root->untriedMoves = rootMoves;
+  auto startTime = std::chrono::steady_clock::now();
+  const int maxPlies = 40;
+
+  while (true) {
+      auto now = std::chrono::steady_clock::now();
+      if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count() >= timeLimitMs)
+          break;
+
+      Board state = *board;
+      MCTSNode* node = root;
+      while (node->untriedMoves.empty() && !node->children.empty()) {
+          node = selectNode(node);
+          state.implementMove(&node->move);
+      }
+      if (!node->untriedMoves.empty()) node = expandNode(node, state);
+      int plies = 0;
+      double result;
+      while (true) {
+          if (plies >= cutoffPlies) {
+              Move best;
+              int alpha = std::numeric_limits<int>::min()/2;
+              int beta  = std::numeric_limits<int>::max()/2;
+              int val = negamax(state, d, alpha, beta, best, 0);
+              result = 0.5 + val / 20000.0;
+              break;
+          }
+          auto moves = generateLegalMoves(state);
+          moves = filterLegalMoves(state, moves);
+          if (moves.empty()) {
+              bool inCheck = state.isKingInCheck(state.turn);
+              result = (!inCheck ? 0.5 : (state.turn != rootPlayer ? 1.0 : 0.0));
+              break;
+          }
+          std::uniform_int_distribution<int> dist(0, (int)moves.size()-1);
+          Move m = moves[dist(mctsRng)];
+          state.implementMove(&m);
+          ++plies;
+      }
+      backpropagate(node, result);
+  }
+  MCTSNode* bestChild = nullptr;
+  int bestVisits = -1;
+  for (auto c : root->children) if (c->visits > bestVisits) { bestVisits = c->visits; bestChild = c; }
+  Move bestMove = bestChild ? bestChild->move : rootMoves[0];
+  std::cout << "bestmove " << moveToUCI(bestMove) << std::endl;
+  std::function<void(MCTSNode*)> deleter = [&](MCTSNode* n) { for (auto c : n->children) deleter(c); delete n; };
+  deleter(root);
+}
+void SearchEngine::populateBestMoveMCTS_IP_M(Board* board) {
+  int d = searchDepth;
+  int rootPlayer = board->turn;
+  int priorThreshold = 5; 
+  double gamma = 1000.0; 
+
+  auto rootMoves = generateLegalMoves(*board);
+  rootMoves = filterLegalMoves(*board, rootMoves);
+  if (rootMoves.empty()) { std::cout << "bestmove 0000\n"; return; }
+
+  MCTSNode* root = new MCTSNode(nullptr, Move{}, rootPlayer);
+  root->untriedMoves = rootMoves;
+  auto startTime = std::chrono::steady_clock::now();
+
+  while (true) {
+      auto now = std::chrono::steady_clock::now();
+      if (std::chrono::duration_cast<std::chrono::milliseconds>(now - startTime).count() >= timeLimitMs)
+          break;
+
+      Board state = *board;
+      MCTSNode* node = root;
+      while (node->untriedMoves.empty() && !node->children.empty()) {
+          if (node->visits == priorThreshold) {
+              Move best;
+              int alpha = std::numeric_limits<int>::min()/2;
+              int beta  = std::numeric_limits<int>::max()/2;
+              int val = negamax(state, d, alpha, beta, best, 0);
+              double h = 0.5 + val / 20000.0;
+              node->wins += gamma * h;
+              node->visits += (int)gamma;
+          }
+          node = selectNode(node);
+          state.implementMove(&node->move);
+      }
+      if (!node->untriedMoves.empty()) node = expandNode(node, state);
+      const int maxPlies = 40;
+      int plies = 0;
+      while (plies < maxPlies) {
+          auto moves = generateLegalMoves(state);
+          moves = filterLegalMoves(state, moves);
+          if (moves.empty()) break;
+          std::uniform_int_distribution<int> dist(0, (int)moves.size()-1);
+          Move m = moves[dist(mctsRng)]; state.implementMove(&m);
+          ++plies;
+      }
+      double result;
+      auto endMoves = generateLegalMoves(state);
+      endMoves = filterLegalMoves(state, endMoves);
+      if (!endMoves.empty()) result = 0.5;
+      else { bool inCheck = state.isKingInCheck(state.turn); result = (state.turn != rootPlayer ? 1.0 : 0.0); }
+
+      backpropagate(node, result);
+  }
+  MCTSNode* bestChild = nullptr;
+  int bestVisits = -1;
+  for (auto c : root->children) if (c->visits > bestVisits) { bestVisits = c->visits; bestChild = c; }
+  Move bestMove = bestChild ? bestChild->move : rootMoves[0];
+  std::cout << "bestmove " << moveToUCI(bestMove) << std::endl;
+  std::function<void(MCTSNode*)> deleter = [&](MCTSNode* n) { for (auto c : n->children) deleter(c); delete n; };
+  deleter(root);
+}
+
+
